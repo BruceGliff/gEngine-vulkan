@@ -36,7 +36,7 @@ int main() {
     bool showOneFrame = true;
     do {
         glfwPollEvents();
-    } while (!showOneFrame);
+    } while (!showOneFrame && !glfwWindowShouldClose(window));
 
     glfwDestroyWindow(window);
 

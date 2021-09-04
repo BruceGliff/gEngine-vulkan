@@ -23,12 +23,9 @@ set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(GLFW_INSTALL OFF CACHE BOOL "" FORCE)
 
-add_subdirectory(../../external/glfw ./external/build)
 target_link_libraries(${PROJECT_NAME} glfw)
-
 target_link_libraries(${PROJECT_NAME} vulkan)
 
-include_directories(../../external/glm)
 
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin/)
 
