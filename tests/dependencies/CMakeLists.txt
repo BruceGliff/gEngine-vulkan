@@ -14,7 +14,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(SOURCES_CC src/main.cc)
 add_executable(${PROJECT_NAME} ${SOURCES_CC})
 
-set_source_files_properties(${SOURCES_CC} COMPILE_FLAGS "-Wall -O2")
+set_source_files_properties(${SOURCES_CC} COMPILE_FLAGS "-Wall -O2 -g")
 
 
 # template from GLFW Documentation
