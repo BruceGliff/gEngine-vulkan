@@ -14,3 +14,5 @@ External dependencies on binaries and packages:
 - glslc:
   - https://github.com/google/shaderc/blob/main/downloads.md
   
+Code format:
+- git-clang-format
