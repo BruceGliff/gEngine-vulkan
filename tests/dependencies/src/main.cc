@@ -1,9 +1,9 @@
-/* 
+/*
 
-Test program creates empty window and checks supported vulkan extension.\
+Test program creates empty window and checks supported vulkan extension.
 
 Dependencies: glfw, glm
-Link: -lvulkan
+Link: -lvulkan -glfw
 
 */
 #define GLFW_INCLUDE_VULKAN
@@ -17,30 +17,31 @@ Link: -lvulkan
 #include <iostream>
 
 int main() {
-    glfwInit();
+  glfwInit();
 
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
+  glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+  GLFWwindow *window =
+      glfwCreateWindow(800, 600, "Vulkan window", nullptr, nullptr);
 
-    uint32_t extensionCount = 0;
-    vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
+  uint32_t extensionCount = 0;
+  vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
 
-    std::cout << extensionCount << " extensions supported" << std::endl;
-    if (!extensionCount)
-        throw std::runtime_error {"Extensions must be greater than zero!"};
+  std::cout << extensionCount << " extensions supported" << std::endl;
+  if (!extensionCount)
+    throw std::runtime_error{"Extensions must be greater than zero!"};
 
-    glm::mat4 matrix;
-    glm::vec4 vec;
-    auto __attribute__((unused)) test = matrix * vec;
+  glm::mat4 matrix;
+  glm::vec4 vec;
+  auto __attribute__((unused)) test = matrix * vec;
 
-    bool showOneFrame = true;
-    do {
-        glfwPollEvents();
-    } while (!showOneFrame && !glfwWindowShouldClose(window));
+  bool showOneFrame = true;
+  do {
+    glfwPollEvents();
+  } while (!showOneFrame && !glfwWindowShouldClose(window));
 
-    glfwDestroyWindow(window);
+  glfwDestroyWindow(window);
 
-    glfwTerminate();
+  glfwTerminate();
 
-    return 0;
+  return 0;
 }
