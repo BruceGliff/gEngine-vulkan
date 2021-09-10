@@ -8,10 +8,9 @@ file(GLOB_RECURSE SRC_FILES lib/*.cc)
 add_executable(${PROJECT_NAME} main.cc ${SRC_FILES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-message(${CMAKE_CURRENT_SOURCE_DIR})
 
 
-target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O2 -g)
+target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O2 -g -DDebug)
 target_link_libraries(${PROJECT_NAME} glfw vulkan)
 
 
@@ -21,5 +20,5 @@ add_custom_command(
   TARGET ${PROJECT_NAME} POST_BUILD
   COMMAND ${PROJECT_NAME}
   WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin/
-  COMMENT "Runs test program to check external dependencies. ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME}"
+  COMMENT "Runs program. ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME}"
 )
