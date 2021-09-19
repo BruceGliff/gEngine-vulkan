@@ -1,10 +1,12 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <cassert>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <stdexcept>
-#include <cassert>
+#include <vector>
 
 #include "decoy/decoy.h"
 
@@ -51,10 +53,10 @@ private:
       .apiVersion = VK_API_VERSION_1_0
     };
 
-    // TODO check for an extensions
     uint32_t glfwExtensionCount {0};
-    char const ** glfwExtensions {};
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    char const **glfwExtensions =
+        glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    checkExtensions(glfwExtensions, glfwExtensionCount);
 
     // Required struct tells the Vulkan driver whick global
     // extension and validation level to use
@@ -73,6 +75,30 @@ private:
     
   }
 
+  // Checks all required extensions listed in ReqExt for occurance in VK
+  void checkExtensions(char const **ReqExt, uint32_t ExtCount) {
+    assert(ReqExt);
+    assert(ExtCount);
+
+    uint32_t AvailableExtCount{};
+    vkEnumerateInstanceExtensionProperties(nullptr, &AvailableExtCount,
+                                           nullptr);
+    std::vector<VkExtensionProperties> AvailableExts(AvailableExtCount);
+    vkEnumerateInstanceExtensionProperties(nullptr, &AvailableExtCount,
+                                           AvailableExts.data());
+
+    uint32_t idx = 0;
+    while (idx != ExtCount) {
+      bool isFounded{false};
+      for (auto &&Ext : AvailableExts)
+        if (!strcmp(Ext.extensionName, ReqExt[idx])) {
+          idx++;
+          isFounded = true;
+        }
+      if (!isFounded)
+        std::cerr << "Extension: " << ReqExt[idx] << " is not founded!\n";
+    }
+  }
 
   void mainLoop() {
     while (!glfwWindowShouldClose(m_Window)) {
