@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -59,6 +60,8 @@ class HelloTriangleApplication {
   VkInstance m_instance {};
   // Member for a call back handling.
   VkDebugUtilsMessengerEXT m_debugMessenger{};
+  // Preferable device. Will be freed automatically.
+  VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
 
 public:
   void run() {
@@ -81,6 +84,82 @@ private:
   void initVulkan() {
     createInstance();
     setupDebugMessenger();
+    pickPhysicalDevice();
+  }
+
+  void pickPhysicalDevice() {
+    uint32_t deviceCount{0};
+    vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
+    if (!deviceCount)
+      throw std::runtime_error{"No physical device supports Vulkan!"};
+
+    std::vector<VkPhysicalDevice> devices(deviceCount);
+    vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
+
+    for (const auto &device : devices)
+      if (isDeviceSuitable(device)) {
+        m_physicalDevice = device;
+        break;
+      }
+
+    if (!m_physicalDevice)
+      throw std::runtime_error("failed to find a suitable GPU!");
+  }
+
+  // Checks which queue families are supported by the device and which one of
+  // these supports the commands that we want to use.
+  struct QueueFamilyIndices {
+    // optional just because we may be want to select GPU with some family, but
+    // it is not strictly necessary.
+    std::optional<uint32_t> graphicsFamily;
+
+    bool isComplete() { return graphicsFamily.has_value(); }
+  };
+
+  QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+    QueueFamilyIndices indices;
+    // Logic to find queue family indices to populate struct with
+
+    uint32_t queueFamilyCount = 0;
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
+                                             nullptr);
+
+    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
+                                             queueFamilies.data());
+
+    int i = 0;
+    for (const auto &queueFamily : queueFamilies) {
+      if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+        indices.graphicsFamily = i;
+
+      // Not quite sure why the hell we need this early-break.
+      if (indices.isComplete())
+        break;
+      i++;
+    }
+
+    return indices;
+  }
+
+  // Checks if device is suitable for our extensions and purposes.
+  bool isDeviceSuitable(VkPhysicalDevice device) {
+    // name, type, supported Vulcan version can be quired via
+    // GetPhysicalDeviceProperties.
+    VkPhysicalDeviceProperties deviceProperties;
+    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+
+    // optional features like texture compressing, 64bit floating operations,
+    // multiview-port and so one..
+    VkPhysicalDeviceFeatures deviceFeatures;
+    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+
+    // Right now I have only one INTEGRATED GPU(on linux). But it will be more
+    // suitable to calculate score and select preferred GPU with the highest
+    // score. (eg. discrete GPU has +1000 score..)
+
+    // But we want to find out if GPU is graphicFamily. (?)
+    return findQueueFamilies(device).isComplete();
   }
 
   VkDebugUtilsMessengerCreateInfoEXT populateDebugMessengerInfo() {
