@@ -62,6 +62,11 @@ class HelloTriangleApplication {
   VkDebugUtilsMessengerEXT m_debugMessenger{};
   // Preferable device. Will be freed automatically.
   VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
+  // Logical device.
+  VkDevice m_device{};
+  // Queue automatically created with logical device, but we need to create a
+  // handles. And queues automatically destroyed within device.
+  VkQueue m_graphicsQueue{};
 
 public:
   void run() {
@@ -85,6 +90,53 @@ private:
     createInstance();
     setupDebugMessenger();
     pickPhysicalDevice();
+    createLogicalDevice();
+  }
+
+  void createLogicalDevice() {
+    QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
+
+    // Structure describes number of queues for a single queueFamily.
+    // Right now we are only interested in queue with graphic capabilities.
+    VkDeviceQueueCreateInfo queueCreateInfo{};
+    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
+    queueCreateInfo.queueCount = 1;
+    // This setup scheduling weight of command buffer execution.
+    float queuePriority = 1.0f;
+    queueCreateInfo.pQueuePriorities = &queuePriority;
+
+    // Right now we do not need this.
+    VkPhysicalDeviceFeatures deviceFeatures{};
+
+    // The main deviceIndo structure.
+    VkDeviceCreateInfo createInfo{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .queueCreateInfoCount = 1,
+        .pQueueCreateInfos = &queueCreateInfo,
+        .enabledLayerCount = 0,
+        .enabledExtensionCount = 0,
+        .pEnabledFeatures = &deviceFeatures,
+    };
+    // To be compatible with older implementations, as new Vulcan version
+    // does not require ValidaionLayers
+    if (m_EnableValidationLayers) {
+      createInfo.enabledLayerCount =
+          static_cast<uint32_t>(m_ValidationLayers.size());
+      createInfo.ppEnabledLayerNames = m_ValidationLayers.data();
+    }
+
+    if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to create logical device!");
+
+    // We can use the vkGetDeviceQueue function to retrieve queue handles for
+    // each queue family. The parameters are the logical device, queue family,
+    // queue index and a pointer to the variable to store the queue handle in.
+    // Because we're only creating a single queue from this family, we'll simply
+    // use index 0.
+    vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0,
+                     &m_graphicsQueue);
   }
 
   void pickPhysicalDevice() {
@@ -322,6 +374,7 @@ private:
   }
 
   void cleanup() {
+    vkDestroyDevice(m_device, nullptr);
     if (m_EnableValidationLayers)
       destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
     vkDestroyInstance(m_instance, nullptr);
