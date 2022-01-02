@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iostream>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <vector>
 
@@ -67,6 +68,12 @@ class HelloTriangleApplication {
   // Queue automatically created with logical device, but we need to create a
   // handles. And queues automatically destroyed within device.
   VkQueue m_graphicsQueue{};
+  // Presentation queue.
+  VkQueue m_presentQueue{};
+  // Surface to be rendered in.
+  // It is actually platform-dependent, but glfw uses function which fills
+  // platform-specific structures by itselfes.
+  VkSurfaceKHR m_surface{};
 
 public:
   void run() {
@@ -89,22 +96,38 @@ private:
   void initVulkan() {
     createInstance();
     setupDebugMessenger();
+    // It has to be placed here, because we need already created Instance
+    // and picking PhysicalDevice can rely on Surface attributes.
+    createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
+  }
+
+  void createSurface() {
+    if (glfwCreateWindowSurface(m_instance, m_Window, nullptr, &m_surface) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to create window surface!");
   }
 
   void createLogicalDevice() {
     QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
 
-    // Structure describes number of queues for a single queueFamily.
-    // Right now we are only interested in queue with graphic capabilities.
-    VkDeviceQueueCreateInfo queueCreateInfo{};
-    queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    queueCreateInfo.queueFamilyIndex = indices.graphicsFamily.value();
-    queueCreateInfo.queueCount = 1;
-    // This setup scheduling weight of command buffer execution.
-    float queuePriority = 1.0f;
-    queueCreateInfo.pQueuePriorities = &queuePriority;
+    // Each queue family has to have own VkDeviceQueueCreateInfo.
+    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos{};
+    // This is the worst way of doing it. Rethink!
+    std::set<uint32_t> setUniqueInfoIdx = {indices.graphicsFamily.value(),
+                                           indices.presentFamily.value()};
+
+    float queuePriority{1.f};
+    for (uint32_t queueFamily : setUniqueInfoIdx) {
+      VkDeviceQueueCreateInfo queueCreateInfo{
+          .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+          .queueFamilyIndex = queueFamily,
+          .queueCount = 1,
+          .pQueuePriorities = &queuePriority,
+      };
+      queueCreateInfos.push_back(std::move(queueCreateInfo));
+    }
 
     // Right now we do not need this.
     VkPhysicalDeviceFeatures deviceFeatures{};
@@ -112,8 +135,8 @@ private:
     // The main deviceIndo structure.
     VkDeviceCreateInfo createInfo{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = 1,
-        .pQueueCreateInfos = &queueCreateInfo,
+        .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
+        .pQueueCreateInfos = queueCreateInfos.data(),
         .enabledLayerCount = 0,
         .enabledExtensionCount = 0,
         .pEnabledFeatures = &deviceFeatures,
@@ -137,6 +160,8 @@ private:
     // use index 0.
     vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0,
                      &m_graphicsQueue);
+    vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0,
+                     &m_presentQueue);
   }
 
   void pickPhysicalDevice() {
@@ -163,15 +188,19 @@ private:
   struct QueueFamilyIndices {
     // optional just because we may be want to select GPU with some family, but
     // it is not strictly necessary.
-    std::optional<uint32_t> graphicsFamily;
+    std::optional<uint32_t> graphicsFamily{};
+    // Not every device can support presentation of the image, so need to
+    // check that divece has proper family queue.
+    std::optional<uint32_t> presentFamily{};
 
-    bool isComplete() { return graphicsFamily.has_value(); }
+    bool isComplete() {
+      return graphicsFamily.has_value() && presentFamily.has_value();
+    }
   };
 
   QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
     QueueFamilyIndices indices;
-    // Logic to find queue family indices to populate struct with
-
+    // Logic to find queue family indices to populate struct with.
     uint32_t queueFamilyCount = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
                                              nullptr);
@@ -179,18 +208,28 @@ private:
     std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
     vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
                                              queueFamilies.data());
+    {
+      int i = 0;
+      for (const auto &queueFamily : queueFamilies) {
+        // For better performance one queue famili has to support all requested
+        // queues at once, but we also can treat them as different families for
+        // unified approach.
+        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
+          indices.graphicsFamily = i;
 
-    int i = 0;
-    for (const auto &queueFamily : queueFamilies) {
-      if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-        indices.graphicsFamily = i;
+        // Checks for presentation family support.
+        VkBool32 presentSupport = false;
+        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface,
+                                             &presentSupport);
+        if (presentSupport)
+          indices.presentFamily = i;
 
-      // Not quite sure why the hell we need this early-break.
-      if (indices.isComplete())
-        break;
-      i++;
+        // Not quite sure why the hell we need this early-break.
+        if (indices.isComplete())
+          break;
+        i++;
+      }
     }
-
     return indices;
   }
 
@@ -377,6 +416,7 @@ private:
     vkDestroyDevice(m_device, nullptr);
     if (m_EnableValidationLayers)
       destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
+    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
     vkDestroyInstance(m_instance, nullptr);
 
     glfwDestroyWindow(m_Window);
