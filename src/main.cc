@@ -120,7 +120,10 @@ private:
     createLogicalDevice();
     createSwapchain();
     createImageViews();
+    createGraphicPipeline();
   }
+
+  void createGraphicPipeline() {}
 
   void createImageViews() {
     m_swapchainImageViews.resize(m_swapchainImages.size());
