@@ -1,6 +1,9 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include <decoy/decoy.h>
+#include <shader/shader.h>
+
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -12,7 +15,6 @@
 #include <stdexcept>
 #include <vector>
 
-#include "decoy/decoy.h"
 
 // This is some hack for a callback handling.
 // VkDebugUtilsMessengerCreateInfoEXT struct should be passed to
@@ -123,7 +125,44 @@ private:
     createGraphicPipeline();
   }
 
-  void createGraphicPipeline() {}
+  void createGraphicPipeline() {
+    Shader VShader{"/home/brucegliff/code/gEngine-vulkan/build/bin/gEngine/"
+                   "assets/shaders/basic.vert.spv"};
+    Shader FShader{"/home/brucegliff/code/gEngine-vulkan/build/bin/gEngine/"
+                   "assets/shaders/basic.frag.spv"};
+
+    VkShaderModule vertShaderModule = createShaderModule(VShader);
+    VkShaderModule fragShaderModule = createShaderModule(FShader);
+
+    VkPipelineShaderStageCreateInfo vertShaderStageInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_VERTEX_BIT,
+        .module = vertShaderModule,
+        .pName = "main"};
+
+    VkPipelineShaderStageCreateInfo fragShaderStageInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .module = fragShaderModule,
+        .pName = "main"};
+
+    VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo,
+                                                      fragShaderStageInfo};
+  }
+
+  VkShaderModule createShaderModule(Shader const &Ker) {
+    VkShaderModuleCreateInfo createInfo{
+        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+        .codeSize = Ker.getSize(),
+        .pCode = Ker.getRawData()};
+
+    VkShaderModule shaderModule;
+    if (vkCreateShaderModule(m_device, &createInfo, nullptr, &shaderModule) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to create shader module!");
+
+    return shaderModule;
+  }
 
   void createImageViews() {
     m_swapchainImageViews.resize(m_swapchainImages.size());
