@@ -88,6 +88,9 @@ class HelloTriangleApplication {
   std::vector<VkImage> m_swapchainImages;
   VkFormat m_swapchainImageFormat;
   VkExtent2D m_swapchainExtent;
+  // ImageView used to specify how to treat VkImage.
+  // For each VkImage we create VkImageView.
+  std::vector<VkImageView> m_swapchainImageViews;
 
 public:
   void run() {
@@ -116,6 +119,39 @@ private:
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapchain();
+    createImageViews();
+  }
+
+  void createImageViews() {
+    m_swapchainImageViews.resize(m_swapchainImages.size());
+    {
+      int i = 0;
+      for (VkImage const &Image : m_swapchainImages) {
+        VkImageViewCreateInfo createInfo{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = Image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = m_swapchainImageFormat,
+            .components = {VK_COMPONENT_SWIZZLE_IDENTITY,
+                           VK_COMPONENT_SWIZZLE_IDENTITY,
+                           VK_COMPONENT_SWIZZLE_IDENTITY,
+                           VK_COMPONENT_SWIZZLE_IDENTITY}, // rgba
+        };
+        // subresourceRange defines what is image purpose and which part of
+        // image should be accessed. Image will be used as color target without
+        // mipmapping levels or multiple layers.
+        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        createInfo.subresourceRange.baseMipLevel = 0;
+        createInfo.subresourceRange.levelCount = 1;
+        createInfo.subresourceRange.baseArrayLayer = 0;
+        createInfo.subresourceRange.layerCount = 1;
+
+        if (vkCreateImageView(m_device, &createInfo, nullptr,
+                              &m_swapchainImageViews[i]) != VK_SUCCESS)
+          throw std::runtime_error("failed to create image views!");
+        ++i;
+      }
+    }
   }
 
   void createSwapchain() {
@@ -614,6 +650,8 @@ private:
   }
 
   void cleanup() {
+    for (auto imageView : m_swapchainImageViews)
+      vkDestroyImageView(m_device, imageView, nullptr);
     vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
     vkDestroyDevice(m_device, nullptr);
     if (m_enableValidationLayers)
