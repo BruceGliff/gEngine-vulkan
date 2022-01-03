@@ -1,11 +1,11 @@
 #pragma once
 
-#include <string>
 #include <string_view>
+#include <vector>
 
 class Shader {
   // TODO may be std::byte?
-  std::string RawData{};
+  std::vector<char> RawData{};
 
 public:
   Shader(std::string_view PathToShader);
@@ -16,7 +16,7 @@ public:
   Shader &operator=(Shader const &) = delete;
   Shader &operator=(Shader &&) = delete;
 
-  static std::string readFile(std::string_view PathToShader);
+  static std::vector<char> readFile(std::string_view PathToShader);
   // Just for VK.
   uint32_t const *getRawData();
   uint32_t const *getRawData() const;

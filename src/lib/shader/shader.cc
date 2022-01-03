@@ -2,20 +2,19 @@
 
 #include <fstream>
 #include <iostream>
-#include <sstream>
 
 #include <cassert>
 
-std::string Shader::readFile(std::string_view PathToShader) {
-  std::ifstream Kernel(PathToShader.data(), std::ios::binary);
+std::vector<char> Shader::readFile(std::string_view PathToShader) {
+  std::ifstream Kernel{PathToShader.data(), std::ios::binary};
   if (!Kernel.is_open()) {
     std::cerr << "Cannot open file: " << PathToShader << '\n';
     return {};
   }
-  std::stringstream Buffer;
-  Buffer << Kernel.rdbuf();
 
-  return Buffer.str();
+  std::noskipws(Kernel);
+  std::istreambuf_iterator<char> Begin{Kernel}, End;
+  return std::vector<char>{Begin, End};
 };
 
 Shader::Shader(std::string_view PathToShader)
