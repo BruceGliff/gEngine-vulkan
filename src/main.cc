@@ -98,6 +98,8 @@ class HelloTriangleApplication {
   // Used for an uniform variable.
   VkPipelineLayout m_pipelineLayout;
 
+  VkPipeline m_graphicsPipeline;
+
 public:
   void run() {
     initWindow();
@@ -285,6 +287,33 @@ private:
     if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr,
                                &m_pipelineLayout) != VK_SUCCESS)
       throw std::runtime_error("failed to create pipeline layout!");
+
+    VkGraphicsPipelineCreateInfo pipelineInfo{
+        .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+        .stageCount = 2,
+        .pStages = shaderStages,
+        .pVertexInputState = &vertexInputInfo,
+        .pInputAssemblyState = &inputAssembly,
+        .pViewportState = &viewportState,
+        .pRasterizationState = &rasterizer,
+        .pMultisampleState = &multisampling,
+        .pDepthStencilState = nullptr, // Optional
+        .pColorBlendState = &colorBlending,
+        .pDynamicState = nullptr, // Optional
+        .layout = m_pipelineLayout,
+        .renderPass = m_renderPass,
+        .subpass = 0,
+        .basePipelineHandle = VK_NULL_HANDLE,
+        .basePipelineIndex = -1,
+    };
+
+    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &pipelineInfo,
+                                  nullptr, &m_graphicsPipeline) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create graphics pipeline!");
+    }
+
+    vkDestroyShaderModule(m_device, fragShaderModule, nullptr);
+    vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
   }
 
   VkShaderModule createShaderModule(Shader const &Ker) {
@@ -829,6 +858,7 @@ private:
   }
 
   void cleanup() {
+    vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     vkDestroyRenderPass(m_device, m_renderPass, nullptr);
     for (auto imageView : m_swapchainImageViews)
