@@ -100,6 +100,9 @@ class HelloTriangleApplication {
 
   VkPipeline m_graphicsPipeline;
 
+  // A framebuffer object references all of the VkImageView objects.
+  std::vector<VkFramebuffer> m_swapChainFramebuffers;
+
 public:
   void run() {
     initWindow();
@@ -130,6 +133,28 @@ private:
     createImageViews();
     createRenderPass();
     createGraphicPipeline();
+    createFramebuffers();
+  }
+
+  void createFramebuffers() {
+    m_swapChainFramebuffers.resize(m_swapchainImageViews.size());
+    int idx{0};
+    for (auto &&ImageView : m_swapchainImageViews) {
+
+      VkFramebufferCreateInfo framebufferInfo{
+          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+          .renderPass = m_renderPass,
+          .attachmentCount = 1,
+          .pAttachments = &ImageView,
+          .width = m_swapchainExtent.width,
+          .height = m_swapchainExtent.height,
+          .layers = 1};
+
+      if (vkCreateFramebuffer(m_device, &framebufferInfo, nullptr,
+                              &m_swapChainFramebuffers[idx++]) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create framebuffer!");
+      }
+    }
   }
 
   void createRenderPass() {
@@ -858,6 +883,8 @@ private:
   }
 
   void cleanup() {
+    for (auto framebuffer : m_swapChainFramebuffers)
+      vkDestroyFramebuffer(m_device, framebuffer, nullptr);
     vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
     vkDestroyRenderPass(m_device, m_renderPass, nullptr);
