@@ -107,6 +107,9 @@ class HelloTriangleApplication {
 
   std::vector<VkCommandBuffer> m_commandBuffers;
 
+  VkSemaphore m_imageAvailableSemaphore;
+  VkSemaphore m_renderFinishedSemaphore;
+
 public:
   void run() {
     initWindow();
@@ -140,6 +143,19 @@ private:
     createFramebuffers();
     createCommandPool();
     createCommandBuffers();
+    createSemaphores();
+  }
+
+  void createSemaphores() {
+    VkSemaphoreCreateInfo semaphoreInfo{
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+
+    if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
+                          &m_imageAvailableSemaphore) != VK_SUCCESS ||
+        vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
+                          &m_renderFinishedSemaphore) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create semaphores!");
+    }
   }
 
   void createCommandBuffers() {
@@ -245,12 +261,22 @@ private:
                                  .colorAttachmentCount = 1,
                                  .pColorAttachments = &colorAttachmentRef};
 
+    VkSubpassDependency dependency{
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT};
+
     VkRenderPassCreateInfo renderPassInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
         .attachmentCount = 1,
         .pAttachments = &colorAttachment,
         .subpassCount = 1,
-        .pSubpasses = &subpass};
+        .pSubpasses = &subpass,
+        .dependencyCount = 1,
+        .pDependencies = &dependency};
 
     if (vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) !=
         VK_SUCCESS) {
@@ -945,13 +971,52 @@ private:
   }
 
   void mainLoop() {
-    while (!glfwWindowShouldClose(m_Window)) {
+    int i = 50;
+    while (!glfwWindowShouldClose(m_Window) && i--) {
       glfwPollEvents();
-      break;
+      drawFrame();
+      // break;
     }
   }
 
+  void drawFrame() {
+    uint32_t imageIndex{0};
+    vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX,
+                          m_imageAvailableSemaphore, VK_NULL_HANDLE,
+                          &imageIndex);
+
+    VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphore};
+    VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore};
+    VkPipelineStageFlags waitStages[] = {
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+    VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                            .waitSemaphoreCount = 1,
+                            .pWaitSemaphores = waitSemaphores,
+                            .pWaitDstStageMask = waitStages,
+                            .commandBufferCount = 1,
+                            .pCommandBuffers = &m_commandBuffers[imageIndex],
+                            .signalSemaphoreCount = 1,
+                            .pSignalSemaphores = signalSemaphores};
+
+    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE) !=
+        VK_SUCCESS) {
+      throw std::runtime_error("failed to submit draw command buffer!");
+    }
+
+    VkSwapchainKHR swapChains[] = {m_swapchain};
+    VkPresentInfoKHR presentInfo{.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                                 .waitSemaphoreCount = 1,
+                                 .pWaitSemaphores = signalSemaphores,
+                                 .swapchainCount = 1,
+                                 .pSwapchains = swapChains,
+                                 .pImageIndices = &imageIndex,
+                                 .pResults = nullptr};
+    vkQueuePresentKHR(m_presentQueue, &presentInfo);
+  }
+
   void cleanup() {
+    vkDestroySemaphore(m_device, m_renderFinishedSemaphore, nullptr);
+    vkDestroySemaphore(m_device, m_imageAvailableSemaphore, nullptr);
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     for (auto framebuffer : m_swapChainFramebuffers)
       vkDestroyFramebuffer(m_device, framebuffer, nullptr);
