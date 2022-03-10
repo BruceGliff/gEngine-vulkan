@@ -50,6 +50,9 @@ class HelloTriangleApplication {
   unsigned const m_Width {1600};
   unsigned const m_Height {900};
 
+  // Hom many frames can be processed concurrently.
+  const int MAX_FRAMES_IN_FLIGHT = 2;
+
   // TODO of course get rid of global code!.
   // This vector is responsible for listing requires validation layers for
   // debug.
@@ -107,10 +110,10 @@ class HelloTriangleApplication {
 
   std::vector<VkCommandBuffer> m_commandBuffers;
 
-  VkSemaphore m_imageAvailableSemaphore;
-  VkSemaphore m_renderFinishedSemaphore;
+  std::vector<VkSemaphore> m_imageAvailableSemaphore;
+  std::vector<VkSemaphore> m_renderFinishedSemaphore;
 
-  VkFence m_inFlightFence;
+  std::vector<VkFence> m_inFlightFence;
 
 public:
   void run() {
@@ -149,24 +152,30 @@ private:
   }
 
   void createSyncObjects() {
+
+    m_imageAvailableSemaphore.resize(MAX_FRAMES_IN_FLIGHT);
+    m_renderFinishedSemaphore.resize(MAX_FRAMES_IN_FLIGHT);
+    m_inFlightFence.resize(MAX_FRAMES_IN_FLIGHT);
+
     VkSemaphoreCreateInfo semaphoreInfo{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
 
     VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                                 .flags = VK_FENCE_CREATE_SIGNALED_BIT};
 
-    if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
-                          &m_imageAvailableSemaphore) != VK_SUCCESS ||
-        vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
-                          &m_renderFinishedSemaphore) != VK_SUCCESS ||
-        vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFence) !=
-            VK_SUCCESS) {
-      throw std::runtime_error("failed to create semaphores!");
-    }
+    for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
+      if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
+                            &m_imageAvailableSemaphore[i]) != VK_SUCCESS ||
+          vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
+                            &m_renderFinishedSemaphore[i]) != VK_SUCCESS ||
+          vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFence[i]) !=
+              VK_SUCCESS) {
+        throw std::runtime_error("failed to create semaphores!");
+      }
   }
 
   void createCommandBuffers() {
-    m_commandBuffers.resize(m_swapChainFramebuffers.size());
+    m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkCommandBufferAllocateInfo allocInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
@@ -986,21 +995,23 @@ private:
     vkDeviceWaitIdle(m_device);
   }
 
+  uint32_t currentFrame = 0;
   void drawFrame() {
-    vkWaitForFences(m_device, 1, &m_inFlightFence, VK_TRUE, UINT64_MAX);
-    vkResetFences(m_device, 1, &m_inFlightFence);
+    vkWaitForFences(m_device, 1, &m_inFlightFence[currentFrame], VK_TRUE,
+                    UINT64_MAX);
+    vkResetFences(m_device, 1, &m_inFlightFence[currentFrame]);
 
     uint32_t imageIndex{0};
     vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX,
-                          m_imageAvailableSemaphore, VK_NULL_HANDLE,
-                          &imageIndex);
+                          m_imageAvailableSemaphore[currentFrame],
+                          VK_NULL_HANDLE, &imageIndex);
 
-    vkResetCommandBuffer(m_commandBuffers[imageIndex],
+    vkResetCommandBuffer(m_commandBuffers[currentFrame],
                          /*VkCommandBufferResetFlagBits*/ 0);
-    recordCommandBuffer(m_commandBuffers[imageIndex], imageIndex);
+    recordCommandBuffer(m_commandBuffers[currentFrame], imageIndex);
 
-    VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphore};
-    VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore};
+    VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphore[currentFrame]};
+    VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore[currentFrame]};
     VkPipelineStageFlags waitStages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
@@ -1008,12 +1019,12 @@ private:
                             .pWaitSemaphores = waitSemaphores,
                             .pWaitDstStageMask = waitStages,
                             .commandBufferCount = 1,
-                            .pCommandBuffers = &m_commandBuffers[imageIndex],
+                            .pCommandBuffers = &m_commandBuffers[currentFrame],
                             .signalSemaphoreCount = 1,
                             .pSignalSemaphores = signalSemaphores};
 
-    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFence) !=
-        VK_SUCCESS) {
+    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo,
+                      m_inFlightFence[currentFrame]) != VK_SUCCESS) {
       throw std::runtime_error("failed to submit draw command buffer!");
     }
 
@@ -1026,12 +1037,16 @@ private:
                                  .pImageIndices = &imageIndex,
                                  .pResults = nullptr};
     vkQueuePresentKHR(m_presentQueue, &presentInfo);
+
+    currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
 
   void cleanup() {
-    vkDestroySemaphore(m_device, m_renderFinishedSemaphore, nullptr);
-    vkDestroySemaphore(m_device, m_imageAvailableSemaphore, nullptr);
-    vkDestroyFence(m_device, m_inFlightFence, nullptr);
+    for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
+      vkDestroySemaphore(m_device, m_renderFinishedSemaphore[i], nullptr);
+      vkDestroySemaphore(m_device, m_imageAvailableSemaphore[i], nullptr);
+      vkDestroyFence(m_device, m_inFlightFence[i], nullptr);
+    }
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
     for (auto framebuffer : m_swapChainFramebuffers)
       vkDestroyFramebuffer(m_device, framebuffer, nullptr);
