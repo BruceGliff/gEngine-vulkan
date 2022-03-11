@@ -118,6 +118,9 @@ class HelloTriangleApplication {
 
   bool framebufferResized = false;
 
+  VkBuffer VertexBuffer;
+  VkDeviceMemory VertexBufferMemory;
+
 public:
   void run() {
     initWindow();
@@ -130,7 +133,7 @@ private:
   void initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);  
     m_Window = glfwCreateWindow(m_Width, m_Height, "Vulkan", nullptr, nullptr);
     assert(m_Window && "Window initializating falis!");
@@ -160,8 +163,45 @@ private:
     createGraphicPipeline();
     createFramebuffers();
     createCommandPool();
+    createVertexBuffer();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  // Rainbow triangle description.
+  std::vector<Vertex> Vertices = {{{0.f, -0.5f}, {1.f, 1.f, 1.f}},
+                                  {{0.5f, 0.5f}, {0.f, 1.f, 0.f}},
+                                  {{-0.5f, 0.5f}, {0.f, 0.f, 1.f}}};
+  void createVertexBuffer() {
+    VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                  .size = sizeof(Vertex) * Vertices.size(),
+                                  .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                                  .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+    if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &VertexBuffer) !=
+        VK_SUCCESS) {
+      throw std::runtime_error("failed to create vertex buffer!");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_device, VertexBuffer, &memRequirements);
+    VkMemoryAllocateInfo allocInfo{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = memRequirements.size,
+        .memoryTypeIndex =
+            findMemoryType(memRequirements.memoryTypeBits,
+                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)};
+
+    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &VertexBufferMemory) !=
+        VK_SUCCESS) {
+      throw std::runtime_error("failed to allocate vertex buffer memory!");
+    }
+    vkBindBufferMemory(m_device, VertexBuffer, VertexBufferMemory, 0);
+
+    void *data;
+    vkMapMemory(m_device, VertexBufferMemory, 0, bufferInfo.size, 0, &data);
+    memcpy(data, Vertices.data(), (size_t)bufferInfo.size);
+    vkUnmapMemory(m_device, VertexBufferMemory);
   }
 
   // Creates new swap chain when smth goes wrong ore resizing.
@@ -245,8 +285,13 @@ private:
                          VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
                       m_graphicsPipeline);
+
+    VkBuffer vertexBuffers[] = {VertexBuffer};
+    VkDeviceSize offsets[] = {0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     // vertexCount, instanceCount, fitstVertex, firstInstance
-    vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+    vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0, 0);
+
     vkCmdEndRenderPass(commandBuffer);
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
       throw std::runtime_error("failed to record command buffer!");
@@ -497,6 +542,21 @@ private:
       throw std::runtime_error("failed to create shader module!");
 
     return shaderModule;
+  }
+
+  // Finds right type of memory to use.
+  uint32_t findMemoryType(uint32_t typeFilter,
+                          VkMemoryAllocateFlags Properties) {
+    VkPhysicalDeviceMemoryProperties MemProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &MemProperties);
+
+    for (uint32_t i = 0; i < MemProperties.memoryTypeCount; i++)
+      if ((typeFilter & (1 << i)) &&
+          (MemProperties.memoryTypes[i].propertyFlags & Properties) ==
+              Properties)
+        return i;
+
+    throw std::runtime_error("failed to find suitable memory type!");
   }
 
   void createImageViews() {
@@ -1105,6 +1165,9 @@ private:
 
   void cleanup() {
     cleanupSwapchain();
+
+    vkDestroyBuffer(m_device, VertexBuffer, nullptr);
+    vkFreeMemory(m_device, VertexBufferMemory, nullptr);
 
     for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
       vkDestroySemaphore(m_device, m_renderFinishedSemaphore[i], nullptr);
