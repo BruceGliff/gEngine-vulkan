@@ -1,8 +1,9 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include <decoy/decoy.h>
-#include <shader/shader.h>
+#include "decoy/decoy.h"
+#include "shader/shader.h"
+#include "vertex.h"
 
 #include <algorithm>
 #include <cassert>
@@ -354,13 +355,15 @@ private:
     VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo,
                                                       fragShaderStageInfo};
 
-    // Right now vertecies are hardcoded in shader.
+    // Fill Vertex binding info.
+    auto bindDescr = Vertex::getBindDescription();
+    auto attrDescr = Vertex::getAttrDescription();
     VkPipelineVertexInputStateCreateInfo vertexInputInfo{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-        .vertexBindingDescriptionCount = 0,
-        .pVertexBindingDescriptions = nullptr, // Optional
-        .vertexAttributeDescriptionCount = 0,
-        .pVertexAttributeDescriptions = nullptr};
+        .vertexBindingDescriptionCount = 1,
+        .pVertexBindingDescriptions = &bindDescr,
+        .vertexAttributeDescriptionCount = attrDescr.size(),
+        .pVertexAttributeDescriptions = attrDescr.data()};
 
     // The rules how verticies will be treated(lines, points, triangles..)
     VkPipelineInputAssemblyStateCreateInfo inputAssembly{
