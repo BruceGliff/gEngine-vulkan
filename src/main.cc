@@ -175,15 +175,61 @@ private:
                                   {{-0.5f, 0.5f}, {0.f, 0.f, 1.f}}};
   void createVertexBuffer() {
     VkDeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
-    createBuffer(BuffSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(BuffSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
                      VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                 VertexBuffer, VertexBufferMemory);
+                 stagingBuffer, stagingBufferMemory);
 
     void *data;
-    vkMapMemory(m_device, VertexBufferMemory, 0, BuffSize, 0, &data);
+    vkMapMemory(m_device, stagingBufferMemory, 0, BuffSize, 0, &data);
     memcpy(data, Vertices.data(), (size_t)BuffSize);
-    vkUnmapMemory(m_device, VertexBufferMemory);
+    vkUnmapMemory(m_device, stagingBufferMemory);
+
+    createBuffer(
+        BuffSize,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VertexBuffer, VertexBufferMemory);
+    copyBuffer(stagingBuffer, VertexBuffer, BuffSize);
+
+    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+  }
+
+  void copyBuffer(VkBuffer srcBuff, VkBuffer dstBuff, VkDeviceSize Size) {
+    // TODO. Maybe separate command pool is to be created for these kinds of
+    // short-lived buffers, because the implementation may be able to apply
+    // memory allocation optimizations. VK_COMMAND_POOL_CREATE_TRANSIENT_BIT for
+    // commandPool generation in that case.
+    VkCommandBufferAllocateInfo allocInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = m_commandPool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1};
+    VkCommandBuffer commandBuffer;
+    vkAllocateCommandBuffers(m_device, &allocInfo, &commandBuffer);
+
+    VkCommandBufferBeginInfo beginInfo{
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+    vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+    VkBufferCopy copyReg{.srcOffset = 0, .dstOffset = 0, .size = Size};
+    vkCmdCopyBuffer(commandBuffer, srcBuff, dstBuff, 1, &copyReg);
+    vkEndCommandBuffer(commandBuffer);
+
+    VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                            .commandBufferCount = 1,
+                            .pCommandBuffers = &commandBuffer};
+
+    vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
+    // TODO sync may be done with Fences for scheduling multiple tranfers
+    // simultaneously.
+    vkQueueWaitIdle(m_graphicsQueue);
+
+    vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
   }
 
   // Creates new swap chain when smth goes wrong ore resizing.
