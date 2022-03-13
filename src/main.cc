@@ -133,7 +133,8 @@ private:
   void initWindow() {
     glfwInit();
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
+    // TODO Resize does not work properly.
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);  
     m_Window = glfwCreateWindow(m_Width, m_Height, "Vulkan", nullptr, nullptr);
     assert(m_Window && "Window initializating falis!");
@@ -173,34 +174,15 @@ private:
                                   {{0.5f, 0.5f}, {0.f, 1.f, 0.f}},
                                   {{-0.5f, 0.5f}, {0.f, 0.f, 1.f}}};
   void createVertexBuffer() {
-    VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                                  .size = sizeof(Vertex) * Vertices.size(),
-                                  .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                                  .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
-    if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &VertexBuffer) !=
-        VK_SUCCESS) {
-      throw std::runtime_error("failed to create vertex buffer!");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device, VertexBuffer, &memRequirements);
-    VkMemoryAllocateInfo allocInfo{
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize = memRequirements.size,
-        .memoryTypeIndex =
-            findMemoryType(memRequirements.memoryTypeBits,
-                           VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                               VK_MEMORY_PROPERTY_HOST_COHERENT_BIT)};
-
-    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &VertexBufferMemory) !=
-        VK_SUCCESS) {
-      throw std::runtime_error("failed to allocate vertex buffer memory!");
-    }
-    vkBindBufferMemory(m_device, VertexBuffer, VertexBufferMemory, 0);
+    VkDeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
+    createBuffer(BuffSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 VertexBuffer, VertexBufferMemory);
 
     void *data;
-    vkMapMemory(m_device, VertexBufferMemory, 0, bufferInfo.size, 0, &data);
-    memcpy(data, Vertices.data(), (size_t)bufferInfo.size);
+    vkMapMemory(m_device, VertexBufferMemory, 0, BuffSize, 0, &data);
+    memcpy(data, Vertices.data(), (size_t)BuffSize);
     vkUnmapMemory(m_device, VertexBufferMemory);
   }
 
@@ -221,6 +203,38 @@ private:
     createRenderPass();
     createGraphicPipeline();
     createFramebuffers();
+  }
+
+  void createBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
+                    VkMemoryPropertyFlags Properties, VkBuffer /*OUT*/ &Buffer,
+                    VkDeviceMemory /*OUT*/ &Memory) {
+    // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
+    // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
+    // queue family specially with TRANSFER_BIT.
+    VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                  .size = Size,
+                                  .usage = Usage,
+                                  .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+
+    if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &Buffer) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create buffer");
+    }
+
+    VkMemoryRequirements memRequirements;
+    vkGetBufferMemoryRequirements(m_device, Buffer, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+        .allocationSize = memRequirements.size,
+        .memoryTypeIndex =
+            findMemoryType(memRequirements.memoryTypeBits, Properties)};
+
+    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &Memory) !=
+        VK_SUCCESS) {
+      throw std::runtime_error("failed to allocate buffer memory");
+    }
+
+    vkBindBufferMemory(m_device, Buffer, Memory, 0);
   }
 
   void createSyncObjects() {
