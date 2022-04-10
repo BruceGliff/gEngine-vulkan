@@ -1,6 +1,5 @@
 #Project building
 
-
 set(PROJECT_NAME gEngine)
 project(${PROJECT_NAME})
 
@@ -10,7 +9,8 @@ add_executable(${PROJECT_NAME} main.cc ${SRC_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O0 -g )
-target_link_libraries(${PROJECT_NAME} glfw vulkan)
+target_include_directories(${PROJECT_NAME} PUBLIC ${LIBRARY_INCLUDE_PATH})
+target_link_libraries(${PROJECT_NAME} glfw Vulkan::Vulkan)
 
 set(OUT_DIR ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME})
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR})
@@ -43,12 +43,4 @@ function(compile_shader)
   add_dependencies(${PROJECT_NAME} ${SHADER_TARGET})
 endfunction()
 
-
 compile_shader()
-
-add_custom_command(
-  TARGET ${PROJECT_NAME} POST_BUILD
-  COMMAND ./${PROJECT_NAME}
-  WORKING_DIRECTORY ${OUT_DIR}
-  COMMENT "Runs program. ${OUT_DIR}"
-)

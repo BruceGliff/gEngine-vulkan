@@ -1,6 +1,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "EnvHandler.h"
 #include "decoy/decoy.h"
 #include "shader/shader.h"
 #include "vertex.h"
@@ -46,6 +47,7 @@ void destroyDebugUtilsMessengerEXT(VkInstance instance,
 }
 
 class HelloTriangleApplication {
+  EnvHandler &EH;
   GLFWwindow * m_Window {};
 
   unsigned const m_Width {1600};
@@ -125,6 +127,7 @@ class HelloTriangleApplication {
   VkDeviceMemory IndexBufferMemory;
 
 public:
+  HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
   void run() {
     initWindow();
     initVulkan();
@@ -138,8 +141,9 @@ private:
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     // TODO Resize does not work properly.
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);  
-    m_Window = glfwCreateWindow(m_Width, m_Height, "Vulkan", nullptr, nullptr);
+    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
+    m_Window = glfwCreateWindow(m_Width, m_Height, EH.getFilenameStr().c_str(),
+                                nullptr, nullptr);
     assert(m_Window && "Window initializating falis!");
 
     glfwSetWindowUserPointer(m_Window, this);
@@ -473,10 +477,10 @@ private:
   }
 
   void createGraphicPipeline() {
-    Shader VShader{"/home/brucegliff/code/gEngine-vulkan/build/bin/gEngine/"
-                   "assets/shaders/basic.vert.spv"};
-    Shader FShader{"/home/brucegliff/code/gEngine-vulkan/build/bin/gEngine/"
-                   "assets/shaders/basic.frag.spv"};
+    fs::path ShadersPath{EH};
+    ShadersPath /= "assets/shaders/";
+    Shader VShader{(ShadersPath / "basic.vert.spv").string()};
+    Shader FShader{(ShadersPath / "basic.frag.spv").string()};
 
     VkShaderModule vertShaderModule = createShaderModule(VShader);
     VkShaderModule fragShaderModule = createShaderModule(FShader);
@@ -1293,13 +1297,15 @@ private:
   }
 };
 
-int main() {
+int main(int argc, char *argv[]) {
 #ifndef NDEBUG
   std::cout << "Debug\n";
 #endif // Debug
   Decoy::Dump();
 
-  HelloTriangleApplication app;
+  EnvHandler EH{argv[0]};
+
+  HelloTriangleApplication app{EH};
   try {
     app.run();
   } catch (const std::exception &e) {
