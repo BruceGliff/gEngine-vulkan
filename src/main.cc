@@ -1,6 +1,10 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#define GLM_FORCE_RADIANS
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
 #include "EnvHandler.h"
 #include "decoy/decoy.h"
 #include "shader/shader.h"
@@ -8,6 +12,7 @@
 
 #include <algorithm>
 #include <cassert>
+#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -16,7 +21,6 @@
 #include <set>
 #include <stdexcept>
 #include <vector>
-
 
 // This is some hack for a callback handling.
 // VkDebugUtilsMessengerCreateInfoEXT struct should be passed to
@@ -45,6 +49,12 @@ void destroyDebugUtilsMessengerEXT(VkInstance instance,
   else
     std::cout << "ERR: debug is not destroyed!\n";
 }
+
+struct UniformBufferObject {
+  glm::mat4 model;
+  glm::mat4 view;
+  glm::mat4 proj;
+};
 
 class HelloTriangleApplication {
   EnvHandler &EH;
@@ -126,6 +136,12 @@ class HelloTriangleApplication {
   VkBuffer IndexBuffer;
   VkDeviceMemory IndexBufferMemory;
 
+  std::vector<VkBuffer> uniformBuffers;
+  std::vector<VkDeviceMemory> uniformBuffersMemory;
+
+  VkDescriptorSetLayout descriptorSetLayout;
+  VkPipelineLayout pipelineLayout;
+
 public:
   HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
   void run() {
@@ -168,13 +184,53 @@ private:
     createSwapchain();
     createImageViews();
     createRenderPass();
+    createDescriptorSetLayout();
     createGraphicPipeline();
     createFramebuffers();
     createCommandPool();
     createVertexBuffer();
     createIndexBuffer();
+    createUniformBuffers();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createUniformBuffers() {
+    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+
+    uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+    uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+
+    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
+      createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                   uniformBuffers[i], uniformBuffersMemory[i]);
+    }
+  }
+
+  void createDescriptorSetLayout() {
+    VkDescriptorSetLayoutBinding uboLayoutBinding{
+        .binding = 0,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
+        .pImmutableSamplers = nullptr};
+
+    VkDescriptorSetLayoutCreateInfo layoutInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+        .bindingCount = 1,
+        .pBindings = &uboLayoutBinding};
+
+    if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr,
+                                    &descriptorSetLayout) != VK_SUCCESS) {
+      throw std::runtime_error("failed to create descriptor set layout");
+    }
+
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorSetLayout};
   }
 
   // Rainbow triangle description.
@@ -269,7 +325,7 @@ private:
     vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
   }
 
-  // Creates new swap chain when smth goes wrong ore resizing.
+  // Creates new swap chain when smth goes wrong or resizing.
   void recreateSwapchain() {
     // Wait till proper size.
     int width = 0, height = 0;
@@ -286,6 +342,37 @@ private:
     createRenderPass();
     createGraphicPipeline();
     createFramebuffers();
+
+    createFramebuffers();
+    createUniformBuffers();
+    createCommandBuffers();
+  }
+
+  void updateUniformBuffer(uint32_t currentImage) {
+    static auto const startTime = std::chrono::high_resolution_clock::now();
+
+    auto const currentTime = std::chrono::high_resolution_clock::now();
+    float const time =
+        std::chrono::duration<float, std::chrono::seconds::period>(currentTime -
+                                                                   startTime)
+            .count();
+
+    UniformBufferObject ubo{
+        .model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f),
+                             glm::vec3(0.f, 0.f, 1.f)),
+        .view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f),
+                            glm::vec3(0.f, 0.f, 1.f)),
+        .proj = glm::perspective(glm::radians(45.f),
+                                 m_swapchainExtent.width /
+                                     (float)m_swapchainExtent.height,
+                                 0.1f, 10.f)};
+    ubo.proj[1][1] *= -1; // because GLM designed for OpenGL.
+
+    void *data;
+    vkMapMemory(m_device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0,
+                &data);
+    memcpy(data, &ubo, sizeof(ubo));
+    vkUnmapMemory(m_device, uniformBuffersMemory[currentImage]);
   }
 
   void createBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
@@ -1204,6 +1291,8 @@ private:
       throw std::runtime_error("failed to acquire swap chain image!");
     }
 
+    updateUniformBuffer(imageIndex);
+
     // Only reset the fence if we are submitting work
     vkResetFences(m_device, 1, &m_inFlightFence[currentFrame]);
 
@@ -1261,11 +1350,17 @@ private:
       vkDestroyImageView(m_device, m_swapchainImageViews[i], nullptr);
 
     vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+
+    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
+      vkDestroyBuffer(m_device, uniformBuffers[i], nullptr);
+      vkFreeMemory(m_device, uniformBuffersMemory[i], nullptr);
+    }
   }
 
   void cleanup() {
     cleanupSwapchain();
 
+    vkDestroyDescriptorSetLayout(m_device, descriptorSetLayout, nullptr);
     vkDestroyBuffer(m_device, VertexBuffer, nullptr);
     vkFreeMemory(m_device, VertexBufferMemory, nullptr);
     vkDestroyBuffer(m_device, IndexBuffer, nullptr);
