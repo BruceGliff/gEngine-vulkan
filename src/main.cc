@@ -140,7 +140,9 @@ class HelloTriangleApplication {
   std::vector<VkDeviceMemory> uniformBuffersMemory;
 
   VkDescriptorSetLayout descriptorSetLayout;
-  VkPipelineLayout pipelineLayout;
+
+  VkDescriptorPool descriptorPool;
+  std::vector<VkDescriptorSet> descriptorSets;
 
 public:
   HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
@@ -191,8 +193,60 @@ private:
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createDescriptorSets() {
+    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT,
+                                               descriptorSetLayout);
+    VkDescriptorSetAllocateInfo allocInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+        .descriptorPool = descriptorPool,
+        .descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
+        .pSetLayouts = layouts.data()};
+
+    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+    if (vkAllocateDescriptorSets(m_device, &allocInfo, descriptorSets.data()) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to allocate descriptor sets");
+
+    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
+      VkDescriptorBufferInfo bufferInfo{.buffer = uniformBuffers[i],
+                                        .offset = 0,
+                                        .range = sizeof(UniformBufferObject)};
+
+      VkWriteDescriptorSet descriptorWrite{
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = descriptorSets[i],
+          .dstBinding = 0,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+          .pImageInfo = nullptr,
+          .pBufferInfo = &bufferInfo,
+          .pTexelBufferView = nullptr};
+
+      vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
+    }
+  }
+
+  void createDescriptorPool() {
+    VkDescriptorPoolSize poolSize{
+        .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT)};
+
+    VkDescriptorPoolCreateInfo poolInfo{
+        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
+        .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
+        .poolSizeCount = 1,
+        .pPoolSizes = &poolSize};
+
+    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &descriptorPool) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to create descriptor pool");
   }
 
   void createUniformBuffers() {
@@ -223,14 +277,8 @@ private:
         .pBindings = &uboLayoutBinding};
 
     if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr,
-                                    &descriptorSetLayout) != VK_SUCCESS) {
+                                    &descriptorSetLayout) != VK_SUCCESS)
       throw std::runtime_error("failed to create descriptor set layout");
-    }
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{
-        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .setLayoutCount = 1,
-        .pSetLayouts = &descriptorSetLayout};
   }
 
   // Rainbow triangle description.
@@ -474,6 +522,10 @@ private:
     VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+
+    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+                            m_pipelineLayout, 0, 1,
+                            &descriptorSets[currentFrame], 0, nullptr);
     // vertexCount, instanceCount, fitstVertex, firstInstance
     vkCmdDrawIndexed(commandBuffer, Indices.size(), 1, 0, 0, 0);
     // vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0,
@@ -626,7 +678,7 @@ private:
         .rasterizerDiscardEnable = VK_FALSE,
         .polygonMode = VK_POLYGON_MODE_FILL,
         .cullMode = VK_CULL_MODE_BACK_BIT,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
         .depthBiasEnable = VK_FALSE,
         .depthBiasConstantFactor = 0.0f, // Optional
         .depthBiasClamp = 0.0f,          // Optional
@@ -678,12 +730,10 @@ private:
     dynamicState.pDynamicStates = dynamicStates;
 
     // Pipeline layout is for using uniform values.
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 0;            // Optional
-    pipelineLayoutInfo.pSetLayouts = nullptr;         // Optional
-    pipelineLayoutInfo.pushConstantRangeCount = 0;    // Optional
-    pipelineLayoutInfo.pPushConstantRanges = nullptr; // Optional
+    VkPipelineLayoutCreateInfo pipelineLayoutInfo{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+        .setLayoutCount = 1,
+        .pSetLayouts = &descriptorSetLayout};
 
     if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr,
                                &m_pipelineLayout) != VK_SUCCESS)
@@ -1291,7 +1341,7 @@ private:
       throw std::runtime_error("failed to acquire swap chain image!");
     }
 
-    updateUniformBuffer(imageIndex);
+    updateUniformBuffer(currentFrame);
 
     // Only reset the fence if we are submitting work
     vkResetFences(m_device, 1, &m_inFlightFence[currentFrame]);
@@ -1360,6 +1410,7 @@ private:
   void cleanup() {
     cleanupSwapchain();
 
+    vkDestroyDescriptorPool(m_device, descriptorPool, nullptr);
     vkDestroyDescriptorSetLayout(m_device, descriptorSetLayout, nullptr);
     vkDestroyBuffer(m_device, VertexBuffer, nullptr);
     vkFreeMemory(m_device, VertexBufferMemory, nullptr);
