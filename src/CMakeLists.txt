@@ -15,9 +15,16 @@ target_link_libraries(${PROJECT_NAME} glfw Vulkan::Vulkan)
 set(OUT_DIR ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME})
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR})
 
+
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${CMAKE_CURRENT_SOURCE_DIR}/assets ${OUT_DIR}/assets
+)
+
 #Shader compiling.
 function(compile_shader)
-  set(SHADER_OUTPUT_DIR ${OUT_DIR}/assets/shaders)
+  set(SHADER_OUTPUT_DIR ${OUT_DIR}/shaders)
   set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
   file(GLOB SHADERS ${SHADER_DIR}/*.vert ${SHADER_DIR}/*.frag)
 

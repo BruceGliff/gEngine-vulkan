@@ -19,6 +19,7 @@ find_package(Vulkan REQUIRED)
 set(LIBRARY_INCLUDE_PATH
   ${CMAKE_CURRENT_SOURCE_DIR}/external/glm/
   ${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/include
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
   ${Vulkan_INCLUDE_DIRS}
    )
 

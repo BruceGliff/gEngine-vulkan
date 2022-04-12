@@ -617,7 +617,7 @@ private:
 
   void createGraphicPipeline() {
     fs::path ShadersPath{EH};
-    ShadersPath /= "assets/shaders/";
+    ShadersPath /= "shaders/";
     Shader VShader{(ShadersPath / "basic.vert.spv").string()};
     Shader FShader{(ShadersPath / "basic.frag.spv").string()};
 
