@@ -5,6 +5,8 @@
 
 class image {
   void *RawData;
+  uint32_t Width;
+  uint32_t Height;
   uint32_t Size;
 
 public:
@@ -13,4 +15,6 @@ public:
 
   void *getRawData() const;
   uint32_t getSize() const;
+  uint32_t getWidth() const;
+  uint32_t getHeight() const;
 };
