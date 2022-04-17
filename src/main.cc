@@ -148,6 +148,9 @@ class HelloTriangleApplication {
   VkImage textureImage;
   VkDeviceMemory textureImageMemory;
 
+  VkImageView textureImageView;
+  VkSampler textureSampler;
+
 public:
   HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
   void run() {
@@ -195,6 +198,8 @@ private:
     createFramebuffers();
     createCommandPool();
     createTextureImage();
+    createTextureImageView();
+    createTextureSampler();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -202,6 +207,58 @@ private:
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createTextureSampler() {
+    VkPhysicalDeviceProperties properties{};
+    // TODO retrieve properties once in program
+    vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+
+    VkSamplerCreateInfo samplerInfo{
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_NEAREST, // VK_FILTER_LINEAR
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .mipLodBias = 0.0f,
+        .anisotropyEnable = VK_TRUE,
+        .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
+        .compareEnable = VK_FALSE,
+        .compareOp = VK_COMPARE_OP_ALWAYS,
+        .minLod = 0.0f,
+        .maxLod = 0.0f,
+        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+        .unnormalizedCoordinates = VK_FALSE};
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &textureSampler) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to create texture sampler!");
+  }
+
+  VkImageView createImageView(VkImage image, VkFormat format) {
+    VkImageViewCreateInfo viewInfo{.sType =
+                                       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                                   .image = image,
+                                   .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                                   .format = format};
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.baseMipLevel = 0;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.baseArrayLayer = 0;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    VkImageView imageView;
+    if (vkCreateImageView(m_device, &viewInfo, nullptr, &imageView) !=
+        VK_SUCCESS)
+      throw std::runtime_error("failed to create texture image view!");
+
+    return imageView;
+  }
+
+  void createTextureImageView() {
+    textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB);
   }
 
   void transitionImageLayout(VkImage image, VkFormat format,
@@ -949,34 +1006,9 @@ private:
 
   void createImageViews() {
     m_swapchainImageViews.resize(m_swapchainImages.size());
-    {
-      int i = 0;
-      for (VkImage const &Image : m_swapchainImages) {
-        VkImageViewCreateInfo createInfo{
-            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-            .image = Image,
-            .viewType = VK_IMAGE_VIEW_TYPE_2D,
-            .format = m_swapchainImageFormat,
-            .components = {VK_COMPONENT_SWIZZLE_IDENTITY,
-                           VK_COMPONENT_SWIZZLE_IDENTITY,
-                           VK_COMPONENT_SWIZZLE_IDENTITY,
-                           VK_COMPONENT_SWIZZLE_IDENTITY}, // rgba
-        };
-        // subresourceRange defines what is image purpose and which part of
-        // image should be accessed. Image will be used as color target without
-        // mipmapping levels or multiple layers.
-        createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        createInfo.subresourceRange.baseMipLevel = 0;
-        createInfo.subresourceRange.levelCount = 1;
-        createInfo.subresourceRange.baseArrayLayer = 0;
-        createInfo.subresourceRange.layerCount = 1;
-
-        if (vkCreateImageView(m_device, &createInfo, nullptr,
-                              &m_swapchainImageViews[i]) != VK_SUCCESS)
-          throw std::runtime_error("failed to create image views!");
-        ++i;
-      }
-    }
+    for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
+      m_swapchainImageViews[i] =
+          createImageView(m_swapchainImages[i], m_swapchainImageFormat);
   }
 
   void createSwapchain() {
@@ -1066,7 +1098,9 @@ private:
     }
 
     // Right now we do not need this.
-    VkPhysicalDeviceFeatures deviceFeatures{};
+    VkPhysicalDeviceFeatures deviceFeatures{
+        .samplerAnisotropy = VK_TRUE,
+    };
 
     // The main deviceIndo structure.
     VkDeviceCreateInfo createInfo{
@@ -1291,7 +1325,8 @@ private:
     // But we want to find out if GPU is graphicFamily. (?)
     return findQueueFamilies(device).isComplete() &&
            checkDeviceExtensionSupport(device) &&
-           swapchainSupport(querySwapchainSupport(device));
+           swapchainSupport(querySwapchainSupport(device)) &&
+           deviceFeatures.samplerAnisotropy;
     // All three ckecks are different. WTF!
   }
 
@@ -1561,6 +1596,9 @@ private:
   void cleanup() {
     cleanupSwapchain();
 
+    vkDestroySampler(m_device, textureSampler, nullptr);
+    vkDestroyImageView(m_device, textureImageView, nullptr);
+
     vkDestroyImage(m_device, textureImage, nullptr);
     vkFreeMemory(m_device, textureImageMemory, nullptr);
 
@@ -1577,14 +1615,6 @@ private:
       vkDestroyFence(m_device, m_inFlightFence[i], nullptr);
     }
     vkDestroyCommandPool(m_device, m_commandPool, nullptr);
-    // for (auto framebuffer : m_swapChainFramebuffers)
-    //   vkDestroyFramebuffer(m_device, framebuffer, nullptr);
-    // vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
-    // vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-    // vkDestroyRenderPass(m_device, m_renderPass, nullptr);
-    // for (auto imageView : m_swapchainImageViews)
-    //   vkDestroyImageView(m_device, imageView, nullptr);
-    // vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
     vkDestroyDevice(m_device, nullptr);
     if (m_enableValidationLayers)
       destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
