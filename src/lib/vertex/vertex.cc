@@ -11,9 +11,8 @@ VkVertexInputBindingDescription Vertex::getBindDescription() {
   return bindingDescription;
 }
 
-Vertex::AttrDescr<2> Vertex::getAttrDescription() {
-
-  AttrDescr<2> Descriptions;
+Vertex::AttrDescr<3> Vertex::getAttrDescription() {
+  AttrDescr<3> Descriptions;
   Descriptions[0].binding = 0;
   Descriptions[0].location = 0;
   Descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
@@ -23,6 +22,11 @@ Vertex::AttrDescr<2> Vertex::getAttrDescription() {
   Descriptions[1].location = 1;
   Descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
   Descriptions[1].offset = offsetof(Vertex, Color);
+
+  Descriptions[2].binding = 0;
+  Descriptions[2].location = 2;
+  Descriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
+  Descriptions[2].offset = offsetof(Vertex, TexCoord);
 
   return Descriptions;
 }
