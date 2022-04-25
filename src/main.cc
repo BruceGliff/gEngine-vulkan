@@ -2,6 +2,7 @@
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -151,6 +152,10 @@ class HelloTriangleApplication {
   VkImageView textureImageView;
   VkSampler textureSampler;
 
+  VkImage depthImage;
+  VkDeviceMemory depthImageMemory;
+  VkImageView depthImageView;
+
 public:
   HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
   void run() {
@@ -195,8 +200,9 @@ private:
     createRenderPass();
     createDescriptorSetLayout();
     createGraphicPipeline();
-    createFramebuffers();
     createCommandPool();
+    createDepthResources();
+    createFramebuffers();
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
@@ -207,6 +213,53 @@ private:
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void createDepthResources() {
+    VkFormat depthFormat = findDepthFormat();
+    createImage(
+        m_swapchainExtent.width, m_swapchainExtent.height, depthFormat,
+        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage, depthImageMemory);
+    depthImageView =
+        createImageView(depthImage, depthFormat, VK_IMAGE_ASPECT_DEPTH_BIT);
+
+    // As I understand this part is optional as we will take care of this in the
+    // render pass.
+    transitionImageLayout(depthImage, depthFormat, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL);
+  }
+
+  VkFormat findDepthFormat() {
+    return findSupportedFormat({VK_FORMAT_D32_SFLOAT,
+                                VK_FORMAT_D32_SFLOAT_S8_UINT,
+                                VK_FORMAT_D24_UNORM_S8_UINT},
+                               VK_IMAGE_TILING_OPTIMAL,
+                               VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT);
+  }
+
+  bool hasStencilComponent(VkFormat format) {
+    return format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
+           format == VK_FORMAT_D24_UNORM_S8_UINT;
+  }
+
+  // Takes a lists of candidate formats from most desireable to the least
+  // desirable and checks the first one is supported.
+  VkFormat findSupportedFormat(std::vector<VkFormat> const &candidates,
+                               VkImageTiling tiling,
+                               VkFormatFeatureFlags features) {
+    for (VkFormat format : candidates) {
+      VkFormatProperties props;
+      vkGetPhysicalDeviceFormatProperties(m_physicalDevice, format, &props);
+      if (tiling == VK_IMAGE_TILING_LINEAR &&
+          (props.linearTilingFeatures & features) == features)
+        return format;
+      else if (tiling == VK_IMAGE_TILING_OPTIMAL &&
+               (props.optimalTilingFeatures & features) == features)
+        return format;
+    }
+
+    throw std::runtime_error("failed to find supported format!");
   }
 
   void createTextureSampler() {
@@ -237,13 +290,14 @@ private:
       throw std::runtime_error("failed to create texture sampler!");
   }
 
-  VkImageView createImageView(VkImage image, VkFormat format) {
+  VkImageView createImageView(VkImage image, VkFormat format,
+                              VkImageAspectFlags aspectFlags) {
     VkImageViewCreateInfo viewInfo{.sType =
                                        VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                                    .image = image,
                                    .viewType = VK_IMAGE_VIEW_TYPE_2D,
                                    .format = format};
-    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.aspectMask = aspectFlags;
     viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
     viewInfo.subresourceRange.baseArrayLayer = 0;
@@ -258,7 +312,8 @@ private:
   }
 
   void createTextureImageView() {
-    textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB);
+    textureImageView = createImageView(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+                                       VK_IMAGE_ASPECT_COLOR_BIT);
   }
 
   void transitionImageLayout(VkImage image, VkFormat format,
@@ -281,6 +336,15 @@ private:
     VkPipelineStageFlags sourceStage;
     VkPipelineStageFlags destinationStage;
 
+    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+      barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+      if (hasStencilComponent(format))
+        barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+      // TODO this else causes validation error. But it is actually useless.
+      // else
+      //  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    }
+
     if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
         newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
       barrier.srcAccessMask = 0;
@@ -293,9 +357,16 @@ private:
       barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
       sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else {
+    } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
+               newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
+      barrier.srcAccessMask = 0;
+      barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
+                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+
+      sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+      destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    } else
       throw std::invalid_argument("unsupported layout transition!");
-    }
 
     vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
                          nullptr, 0, nullptr, 1, &barrier);
@@ -535,12 +606,17 @@ private:
       throw std::runtime_error("failed to create descriptor set layout");
   }
 
-  // Rainbow triangle description.
+  // Two planes.
   std::vector<Vertex> const Vertices = {
-      {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-      {{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-      {{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-      {{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}};
+      {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+      {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+      {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+      {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+      {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+      {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+      {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+      {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
   void createVertexBuffer() {
     VkDeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
 
@@ -566,7 +642,7 @@ private:
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
   }
 
-  std::vector<uint32_t> const Indices = {0, 1, 2, 2, 3, 0};
+  std::vector<uint32_t> const Indices = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
   void createIndexBuffer() {
     VkDeviceSize bufferSize = sizeof(uint32_t) * Indices.size();
 
@@ -621,10 +697,11 @@ private:
     createImageViews();
     createRenderPass();
     createGraphicPipeline();
-    createFramebuffers();
-
+    createDepthResources();
     createFramebuffers();
     createUniformBuffers();
+    createDescriptorPool();
+    createDescriptorSets();
     createCommandBuffers();
   }
 
@@ -719,9 +796,8 @@ private:
         .commandBufferCount = (uint32_t)m_commandBuffers.size()};
 
     if (vkAllocateCommandBuffers(m_device, &allocInfo,
-                                 m_commandBuffers.data()) != VK_SUCCESS) {
+                                 m_commandBuffers.data()) != VK_SUCCESS)
       throw std::runtime_error("failed to allocate command buffers!");
-    }
   }
 
   void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
@@ -734,13 +810,16 @@ private:
       throw std::runtime_error("failed to begin recording command buffer!");
     }
 
-    VkClearValue clearColor = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
+    // Order of clear values should be indentical to the order of attachments.
+    std::array<VkClearValue, 2> clearValues{};
+    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
+    clearValues[1].depthStencil = {1.0f, 0};
     VkRenderPassBeginInfo renderPassInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .renderPass = m_renderPass,
         .framebuffer = m_swapChainFramebuffers[imageIndex],
-        .clearValueCount = 1,
-        .pClearValues = &clearColor};
+        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
+        .pClearValues = clearValues.data()};
     // This part is to avoid "nested designators extension".
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = m_swapchainExtent;
@@ -788,12 +867,12 @@ private:
     m_swapChainFramebuffers.resize(m_swapchainImageViews.size());
     int idx{0};
     for (auto &&ImageView : m_swapchainImageViews) {
-
+      std::array<VkImageView, 2> attachments = {ImageView, depthImageView};
       VkFramebufferCreateInfo framebufferInfo{
           .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
           .renderPass = m_renderPass,
-          .attachmentCount = 1,
-          .pAttachments = &ImageView,
+          .attachmentCount = static_cast<uint32_t>(attachments.size()),
+          .pAttachments = attachments.data(),
           .width = m_swapchainExtent.width,
           .height = m_swapchainExtent.height,
           .layers = 1};
@@ -806,6 +885,20 @@ private:
   }
 
   void createRenderPass() {
+    VkAttachmentDescription depthAttachment{
+        .format = findDepthFormat(),
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
+    VkAttachmentReference depthAttachmentRef{
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+
     VkAttachmentDescription colorAttachment{
         .format = m_swapchainImageFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -819,23 +912,29 @@ private:
     VkAttachmentReference colorAttachmentRef{
         .attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
 
-    VkSubpassDescription subpass{.pipelineBindPoint =
-                                     VK_PIPELINE_BIND_POINT_GRAPHICS,
-                                 .colorAttachmentCount = 1,
-                                 .pColorAttachments = &colorAttachmentRef};
+    VkSubpassDescription subpass{
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &colorAttachmentRef,
+        .pDepthStencilAttachment = &depthAttachmentRef};
 
     VkSubpassDependency dependency{
         .srcSubpass = VK_SUBPASS_EXTERNAL,
         .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
+                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
         .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT};
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
+                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT};
 
+    std::array<VkAttachmentDescription, 2> attachments = {colorAttachment,
+                                                          depthAttachment};
     VkRenderPassCreateInfo renderPassInfo{
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = 1,
-        .pAttachments = &colorAttachment,
+        .attachmentCount = static_cast<uint32_t>(attachments.size()),
+        .pAttachments = attachments.data(),
         .subpassCount = 1,
         .pSubpasses = &subpass,
         .dependencyCount = 1,
@@ -971,6 +1070,18 @@ private:
                                &m_pipelineLayout) != VK_SUCCESS)
       throw std::runtime_error("failed to create pipeline layout!");
 
+    VkPipelineDepthStencilStateCreateInfo depthStencil{
+        .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+        .depthTestEnable = VK_TRUE,
+        .depthWriteEnable = VK_TRUE,
+        .depthCompareOp = VK_COMPARE_OP_LESS,
+        .depthBoundsTestEnable = VK_FALSE,
+        .stencilTestEnable = VK_FALSE,
+        .front = {}, // Optional
+        .back = {},  // Optional
+        .minDepthBounds = 0.f,
+        .maxDepthBounds = 1.f};
+
     VkGraphicsPipelineCreateInfo pipelineInfo{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .stageCount = 2,
@@ -980,7 +1091,7 @@ private:
         .pViewportState = &viewportState,
         .pRasterizationState = &rasterizer,
         .pMultisampleState = &multisampling,
-        .pDepthStencilState = nullptr, // Optional
+        .pDepthStencilState = &depthStencil,
         .pColorBlendState = &colorBlending,
         .pDynamicState = nullptr, // Optional
         .layout = m_pipelineLayout,
@@ -1032,7 +1143,8 @@ private:
     m_swapchainImageViews.resize(m_swapchainImages.size());
     for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
       m_swapchainImageViews[i] =
-          createImageView(m_swapchainImages[i], m_swapchainImageFormat);
+          createImageView(m_swapchainImages[i], m_swapchainImageFormat,
+                          VK_IMAGE_ASPECT_COLOR_BIT);
   }
 
   void createSwapchain() {
@@ -1598,6 +1710,10 @@ private:
   }
 
   void cleanupSwapchain() {
+    vkDestroyImageView(m_device, depthImageView, nullptr);
+    vkDestroyImage(m_device, depthImage, nullptr);
+    vkFreeMemory(m_device, depthImageMemory, nullptr);
+
     for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
       vkDestroyFramebuffer(m_device, m_swapChainFramebuffers[i], nullptr);
 
