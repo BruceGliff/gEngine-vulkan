@@ -13,6 +13,7 @@ project(Initial)
 
 add_subdirectory(external/glm)
 add_subdirectory(external/glfw)
+add_subdirectory(external/tiniobjloader)
 
 find_package(Vulkan REQUIRED)
 
@@ -20,6 +21,7 @@ set(LIBRARY_INCLUDE_PATH
   ${CMAKE_CURRENT_SOURCE_DIR}/external/glm/
   ${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/include
   ${CMAKE_CURRENT_SOURCE_DIR}/external/stb
+  ${CMAKE_CURRENT_SOURCE_DIR}/external/tiniobjloader/
   ${Vulkan_INCLUDE_DIRS}
    )
 

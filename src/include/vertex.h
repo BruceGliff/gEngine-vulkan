@@ -17,4 +17,14 @@ struct Vertex {
   using AttrDescr = std::array<VkVertexInputAttributeDescription, No>;
   static VkVertexInputBindingDescription getBindDescription();
   static AttrDescr<3> getAttrDescription();
+
+  // For using as key in unordered_map.
+  bool operator==(const Vertex &other) const;
 };
+
+// For using as key in unordered_map.
+namespace std {
+template <> struct hash<Vertex> {
+  size_t operator()(Vertex const &vertex) const;
+};
+} // namespace std

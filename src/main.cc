@@ -6,6 +6,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#define TINYOBJLOADER_IMPLEMENTATION
+#include <tiny_obj_loader.h>
+
 #include "EnvHandler.h"
 #include "decoy/decoy.h"
 #include "image/image.h"
@@ -22,6 +25,7 @@
 #include <optional>
 #include <set>
 #include <stdexcept>
+#include <unordered_map>
 #include <vector>
 
 // This is some hack for a callback handling.
@@ -132,6 +136,9 @@ class HelloTriangleApplication {
 
   bool framebufferResized = false;
 
+  std::vector<Vertex> Vertices;
+  std::vector<uint32_t> Indices;
+
   VkBuffer VertexBuffer;
   VkDeviceMemory VertexBufferMemory;
 
@@ -206,6 +213,7 @@ private:
     createTextureImage();
     createTextureImageView();
     createTextureSampler();
+    loadModel();
     createVertexBuffer();
     createIndexBuffer();
     createUniformBuffers();
@@ -213,6 +221,39 @@ private:
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
+  }
+
+  void loadModel() {
+    tinyobj::attrib_t attrib;
+    std::vector<tinyobj::shape_t> shapes;
+    std::vector<tinyobj::material_t> materials;
+    std::string warn, err;
+
+    fs::path ModelPath{EH};
+    ModelPath /= "assets/models/viking_room.obj";
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
+                          ModelPath.generic_string().c_str()))
+      throw std::runtime_error(warn + err);
+
+    // To avoid using Vertex duplications.
+    std::unordered_map<Vertex, uint32_t> uniqueVertices{};
+    for (auto const &shape : shapes)
+      for (auto const &index : shape.mesh.indices) {
+        Vertex vertex{};
+        vertex.Position = {attrib.vertices[3 * index.vertex_index + 0],
+                           attrib.vertices[3 * index.vertex_index + 1],
+                           attrib.vertices[3 * index.vertex_index + 2]};
+        vertex.TexCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
+                           1.0f -
+                               attrib.texcoords[2 * index.texcoord_index + 1]};
+        vertex.Color = {1.0f, 1.0f, 1.0f};
+
+        if (uniqueVertices.count(vertex) == 0) {
+          uniqueVertices[vertex] = static_cast<uint32_t>(Vertices.size());
+          Vertices.push_back(vertex);
+        }
+        Indices.push_back(uniqueVertices[vertex]);
+      }
   }
 
   void createDepthResources() {
@@ -395,7 +436,7 @@ private:
 
   void createTextureImage() {
     fs::path ImagePath{EH};
-    ImagePath /= "assets/textures/texture.jpg";
+    ImagePath /= "assets/textures/viking_room.png";
     image Image(ImagePath.generic_string());
 
     VkBuffer stagingBuffer;
@@ -606,17 +647,6 @@ private:
       throw std::runtime_error("failed to create descriptor set layout");
   }
 
-  // Two planes.
-  std::vector<Vertex> const Vertices = {
-      {{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-      {{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-      {{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-      {{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-      {{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-      {{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-      {{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-      {{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}};
   void createVertexBuffer() {
     VkDeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
 
@@ -642,7 +672,6 @@ private:
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
   }
 
-  std::vector<uint32_t> const Indices = {0, 1, 2, 2, 3, 0, 4, 5, 6, 6, 7, 4};
   void createIndexBuffer() {
     VkDeviceSize bufferSize = sizeof(uint32_t) * Indices.size();
 

@@ -7,3 +7,4 @@ project(test)
 
 add_subdirectory(simple-launch)
 add_subdirectory(dependencies)
+add_subdirectory(objloader)
