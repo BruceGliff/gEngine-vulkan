@@ -2,17 +2,15 @@
 sequel of graphic engine with substitution of openGL with VulkanAPI
 
 External dependencies on binaries and packages:
-- Vulkan:
+- Vulkan(VulkanSDK):
   - vulkan-tools
   - libvulkan-dev
   - vulkan-validationlayers-dev
   - spirv-tools
-- GLFW:
-  - libglfw3-dev
-- GLM:
-  - libglm-dev
-- glslc:
-  - https://github.com/google/shaderc/blob/main/downloads.md
+- [GLFW](https://github.com/glfw/glfw) - Window dependency
+- [glm](https://github.com/g-truc/glm) - Geometry operations for 3D
+- [stb](https://github.com/nothings/stb) - Image loading
+- [tiniobjloader](https://github.com/tinyobjloader/tinyobjloader) - Model loading
   
 Code format:
-- git-clang-format
+- clang-format
