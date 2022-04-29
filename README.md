@@ -1,6 +1,9 @@
 # gEngine-vulkan
 sequel of graphic engine with substitution of openGL with VulkanAPI
 
+Rewriting VulkanAPI with C++ API.
+Redesign classes dependencies.
+
 External dependencies on binaries and packages:
 - Vulkan(VulkanSDK):
   - vulkan-tools
