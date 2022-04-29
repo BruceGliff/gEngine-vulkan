@@ -2,7 +2,9 @@
 
 #include <glm/glm.hpp>
 
+// For hashing.
 #include <array>
+#include <functional>
 
 // Forward declaration.
 struct VkVertexInputBindingDescription;
