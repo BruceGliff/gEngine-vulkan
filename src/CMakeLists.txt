@@ -1,6 +1,5 @@
 #Project building
 
-
 set(PROJECT_NAME gEngine)
 project(${PROJECT_NAME})
 
@@ -10,14 +9,22 @@ add_executable(${PROJECT_NAME} main.cc ${SRC_FILES})
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O0 -g )
-target_link_libraries(${PROJECT_NAME} glfw vulkan)
+target_include_directories(${PROJECT_NAME} PUBLIC ${LIBRARY_INCLUDE_PATH})
+target_link_libraries(${PROJECT_NAME} glfw Vulkan::Vulkan)
 
 set(OUT_DIR ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME})
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR})
 
+
+add_custom_command(
+    TARGET ${PROJECT_NAME} POST_BUILD
+		COMMAND ${CMAKE_COMMAND} -E copy_directory
+		${CMAKE_CURRENT_SOURCE_DIR}/assets ${OUT_DIR}/assets
+)
+
 #Shader compiling.
 function(compile_shader)
-  set(SHADER_OUTPUT_DIR ${OUT_DIR}/assets/shaders)
+  set(SHADER_OUTPUT_DIR ${OUT_DIR}/shaders)
   set(SHADER_DIR ${CMAKE_CURRENT_SOURCE_DIR}/shaders)
   file(GLOB SHADERS ${SHADER_DIR}/*.vert ${SHADER_DIR}/*.frag)
 
@@ -43,12 +50,4 @@ function(compile_shader)
   add_dependencies(${PROJECT_NAME} ${SHADER_TARGET})
 endfunction()
 
-
 compile_shader()
-
-add_custom_command(
-  TARGET ${PROJECT_NAME} POST_BUILD
-  COMMAND ./${PROJECT_NAME}
-  WORKING_DIRECTORY ${OUT_DIR}
-  COMMENT "Runs program. ${OUT_DIR}"
-)
