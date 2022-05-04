@@ -1708,18 +1708,17 @@ private:
   }
 
   std::vector<char const *> getRequiredExtensions() {
-    uint32_t glfwExtensionCount = 0;
-    const char **glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    uint32_t ExtensionCount{};
+    const char **Extensions =
+        glfwGetRequiredInstanceExtensions(&ExtensionCount);
 
-    std::vector<const char *> extensions(glfwExtensions,
-                                         glfwExtensions + glfwExtensionCount);
-
-    // Addition for callback
+    std::vector<const char *> AllExtensions{Extensions,
+                                            Extensions + ExtensionCount};
+    // Addition for callback.
     if (m_enableValidationLayers)
-      extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+      AllExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-    return extensions;
+    return AllExtensions;
   }
 
   void createInstance() {
