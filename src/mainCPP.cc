@@ -1,3 +1,5 @@
+// To use designated initializers.
+// #define VULKAN_HPP_NO_CONSTRUCTORS
 #include <vulkan/vulkan.hpp>
 
 #include <GLFW/glfw3.h>
@@ -35,14 +37,16 @@
 // vkCreateDebugUtilsMessengerEXT, but as this function is an extension, it is
 // not automatically loaded. So we have to look up by ourselfes via
 // vkGetInstanceProcAddr.
+// TODO think about C++ style.
 VkResult createDebugUtilsMessengerEXT(
-    VkInstance instance, const VkDebugUtilsMessengerCreateInfoEXT *pCreateInfo,
-    const VkAllocationCallbacks *pAllocator,
+    vk::Instance const &Instance,
+    VkDebugUtilsMessengerCreateInfoEXT const *pCreateInfo,
+    VkAllocationCallbacks const *pAllocator,
     VkDebugUtilsMessengerEXT *pDebugMessenger) {
   auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-      instance, "vkCreateDebugUtilsMessengerEXT");
+      Instance, "vkCreateDebugUtilsMessengerEXT");
   if (func != nullptr)
-    return func(instance, pCreateInfo, pAllocator, pDebugMessenger);
+    return func(Instance, pCreateInfo, pAllocator, pDebugMessenger);
   else
     return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
@@ -92,7 +96,7 @@ class HelloTriangleApplication {
 
   // An instance needed for connection between app and VkLibrary
   // And adds a detailes about app to the driver
-  VkInstance m_instance{};
+  vk::Instance m_instance;
   // Member for a call back handling.
   VkDebugUtilsMessengerEXT m_debugMessenger{};
   // Preferable device. Will be freed automatically.
@@ -1680,29 +1684,26 @@ private:
     return requiredExtensions.empty();
   }
 
-  VkDebugUtilsMessengerCreateInfoEXT populateDebugMessengerInfo() {
-    VkDebugUtilsMessengerCreateInfoEXT createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
-    createInfo.messageSeverity =
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
-        VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-    createInfo.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
-                             VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
-    createInfo.pfnUserCallback = debugCallback;
-    createInfo.pUserData = nullptr; // Optional
-
-    return createInfo;
+  vk::DebugUtilsMessengerCreateInfoEXT populateDebugMessengerInfo() {
+    using MessageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT;
+    using MessageType = vk::DebugUtilsMessageTypeFlagBitsEXT;
+    return {{},
+            MessageSeverity::eVerbose | MessageSeverity::eWarning |
+                MessageSeverity::eError,
+            MessageType::eGeneral | MessageType::ePerformance |
+                MessageType::eValidation,
+            debugCallback};
   }
 
   void setupDebugMessenger() {
     if (!m_enableValidationLayers)
       return;
 
-    VkDebugUtilsMessengerCreateInfoEXT createInfo{populateDebugMessengerInfo()};
-
-    if (createDebugUtilsMessengerEXT(m_instance, &createInfo, nullptr,
+    // TODO think about C++ style.
+    VkDebugUtilsMessengerCreateInfoEXT CreateInfo =
+        static_cast<VkDebugUtilsMessengerCreateInfoEXT>(
+            populateDebugMessengerInfo());
+    if (createDebugUtilsMessengerEXT(m_instance, &CreateInfo, nullptr,
                                      &m_debugMessenger) != VK_SUCCESS)
       throw std::runtime_error("failed to set up debug messenger!");
   }
@@ -1722,48 +1723,30 @@ private:
   }
 
   void createInstance() {
+    // TODO believe this logic has to be moved somewhere to call constructor of
+    // m_instance only once, fe: m_instance{createInstance}.
     if (m_enableValidationLayers && !checkValidationLayers())
       throw std::runtime_error{
           "Requestred validation layers are not available!"};
 
-    // Some optional information to pass to driver
-    // for some optimizations
-    VkApplicationInfo appInfo{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-                              .pApplicationName = "Hello triangle",
-                              .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-                              .pEngineName = "No Engine",
-                              .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-                              .apiVersion = VK_API_VERSION_1_0};
+    vk::ApplicationInfo AppInfo{"Hello triangle", VK_MAKE_VERSION(1, 0, 0),
+                                "No Engine", VK_MAKE_VERSION(1, 0, 0),
+                                VK_API_VERSION_1_0};
 
     std::vector<char const *> Extensions{getRequiredExtensions()};
-    // Required struct tells the Vulkan driver whick global
-    // extension and validation level to use
-    VkInstanceCreateInfo createInfo{
-        .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-        .pApplicationInfo = &appInfo,
-        .enabledLayerCount = 0,
-        .enabledExtensionCount = static_cast<uint32_t>(Extensions.size()),
-        .ppEnabledExtensionNames = Extensions.data()};
+    std::vector<char const *> const &Layers = m_enableValidationLayers
+                                                  ? m_validationLayers
+                                                  : std::vector<char const *>{};
 
-    // It definetly has to be created before vkCreateInstane. BUT! Check for
-    // vkDestroyInstance. Will it be valid there too?
-    VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo =
+    vk::InstanceCreateInfo CreateInfo{{}, &AppInfo, Layers, Extensions};
+
+    vk::DebugUtilsMessengerCreateInfoEXT DebugCreateInfo =
         m_enableValidationLayers ? populateDebugMessengerInfo()
-                                 : VkDebugUtilsMessengerCreateInfoEXT{};
-    if (m_enableValidationLayers) {
-      createInfo.enabledLayerCount =
-          static_cast<uint32_t>(m_validationLayers.size());
-      createInfo.ppEnabledLayerNames = m_validationLayers.data();
+                                 : vk::DebugUtilsMessengerCreateInfoEXT{};
+    if (m_enableValidationLayers)
+      CreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&DebugCreateInfo;
 
-      // pNext is set to call debug messages for checking vkCreateInstance and
-      // vkDestoryInstance.
-      createInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&debugCreateInfo;
-    }
-
-    // TODO make macros vkSafeCall()
-    if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS) {
-      throw std::runtime_error("failed to create instance!");
-    }
+    m_instance = vk::createInstance(CreateInfo);
   }
 
   // Checks all required extensions listed in ReqExt for occurance in VK
@@ -1944,7 +1927,8 @@ private:
     if (m_enableValidationLayers)
       destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
     vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
-    vkDestroyInstance(m_instance, nullptr);
+    // TODO: Do I need this destroy?
+    m_instance.destroy();
 
     glfwDestroyWindow(m_Window);
 
