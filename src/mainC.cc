@@ -1,4 +1,5 @@
-#define GLFW_INCLUDE_VULKAN
+#include <vulkan/vulkan.hpp>
+
 #include <GLFW/glfw3.h>
 
 #define GLM_FORCE_RADIANS
@@ -64,10 +65,10 @@ struct UniformBufferObject {
 
 class HelloTriangleApplication {
   EnvHandler &EH;
-  GLFWwindow * m_Window {};
+  GLFWwindow *m_Window{};
 
-  unsigned const m_Width {1600};
-  unsigned const m_Height {900};
+  unsigned const m_Width{1600};
+  unsigned const m_Height{900};
 
   // Hom many frames can be processed concurrently.
   const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -90,7 +91,7 @@ class HelloTriangleApplication {
 
   // An instance needed for connection between app and VkLibrary
   // And adds a detailes about app to the driver
-  VkInstance m_instance {};
+  VkInstance m_instance{};
   // Member for a call back handling.
   VkDebugUtilsMessengerEXT m_debugMessenger{};
   // Preferable device. Will be freed automatically.
@@ -1727,14 +1728,12 @@ private:
 
     // Some optional information to pass to driver
     // for some optimizations
-    VkApplicationInfo appInfo {
-      .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-      .pApplicationName = "Hello triangle",
-      .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-      .pEngineName = "No Engine",
-      .engineVersion = VK_MAKE_VERSION(1, 0, 0),
-      .apiVersion = VK_API_VERSION_1_0
-    };
+    VkApplicationInfo appInfo{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+                              .pApplicationName = "Hello triangle",
+                              .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+                              .pEngineName = "No Engine",
+                              .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+                              .apiVersion = VK_API_VERSION_1_0};
 
     std::vector<char const *> Extensions{getRequiredExtensions()};
     // Required struct tells the Vulkan driver whick global
@@ -1765,7 +1764,6 @@ private:
     if (vkCreateInstance(&createInfo, nullptr, &m_instance) != VK_SUCCESS) {
       throw std::runtime_error("failed to create instance!");
     }
-    
   }
 
   // Checks all required extensions listed in ReqExt for occurance in VK
