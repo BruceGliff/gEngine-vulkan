@@ -100,7 +100,7 @@ class HelloTriangleApplication {
   // Member for a call back handling.
   VkDebugUtilsMessengerEXT m_debugMessenger{};
   // Preferable device. Will be freed automatically.
-  VkPhysicalDevice m_physicalDevice{VK_NULL_HANDLE};
+  vk::PhysicalDevice m_physicalDevice;
   // Logical device.
   VkDevice m_device{};
   // Queue automatically created with logical device, but we need to create a
@@ -1034,7 +1034,7 @@ private:
     VkCommandPoolCreateInfo poolInfo{
         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, // Optional
-        .queueFamilyIndex = queueFamilyIndices.graphicsFamily.value(),
+        .queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value(),
     };
 
     if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) !=
@@ -1348,11 +1348,11 @@ private:
     SwapchainSupportDetails swapchainSupport =
         querySwapchainSupport(m_physicalDevice);
 
-    VkSurfaceFormatKHR surfaceFormat =
+    vk::SurfaceFormatKHR surfaceFormat =
         chooseSwapSurfaceFormat(swapchainSupport.formats);
-    VkPresentModeKHR presentMode =
+    vk::PresentModeKHR presentMode =
         chooseSwapPresentMode(swapchainSupport.presentModes);
-    VkExtent2D extent = chooseSwapExtent(swapchainSupport.capabilities);
+    vk::Extent2D extent = chooseSwapExtent(swapchainSupport.capabilities);
 
     // min images count in swap chain(plus one).
     uint32_t imageCount = swapchainSupport.capabilities.minImageCount + 1;
@@ -1361,38 +1361,40 @@ private:
         imageCount > swapchainSupport.capabilities.maxImageCount)
       imageCount = swapchainSupport.capabilities.maxImageCount;
 
-    VkSwapchainCreateInfoKHR createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-    createInfo.surface = m_surface;
-    createInfo.minImageCount = imageCount;
-    createInfo.imageFormat = surfaceFormat.format;
-    createInfo.imageColorSpace = surfaceFormat.colorSpace;
-    createInfo.imageExtent = extent;
-    createInfo.imageArrayLayers = 1;
-    createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+    vk::SwapchainCreateInfoKHR CreateInfo{
+        {},
+        m_surface,
+        imageCount,
+        surfaceFormat.format,
+        surfaceFormat.colorSpace,
+        extent,
+        1,
+        vk::ImageUsageFlagBits::eColorAttachment};
 
-    QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
-    uint32_t queueFamilyIndices[] = {indices.graphicsFamily.value(),
-                                     indices.presentFamily.value()};
+    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
+    uint32_t queueFamilyIndices[] = {Indices.GraphicsFamily.value(),
+                                     Indices.PresentFamily.value()};
 
     // Next, we need to specify how to handle swap chain images that will be
     // used across multiple queue families.
-    if (indices.graphicsFamily != indices.presentFamily) {
-      createInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
-      createInfo.queueFamilyIndexCount = 2;
-      createInfo.pQueueFamilyIndices = queueFamilyIndices;
+    if (Indices.GraphicsFamily != Indices.PresentFamily) {
+      CreateInfo.imageSharingMode = vk::SharingMode::eConcurrent;
+      CreateInfo.queueFamilyIndexCount = 2;
+      CreateInfo.pQueueFamilyIndices = queueFamilyIndices;
     } else {
-      createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
-      createInfo.queueFamilyIndexCount = 0;     // Optional
-      createInfo.pQueueFamilyIndices = nullptr; // Optional
+      CreateInfo.imageSharingMode = vk::SharingMode::eExclusive;
+      CreateInfo.queueFamilyIndexCount = 0;     // Optional
+      CreateInfo.pQueueFamilyIndices = nullptr; // Optional
     }
-    createInfo.preTransform = swapchainSupport.capabilities.currentTransform;
-    createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-    createInfo.presentMode = presentMode;
-    createInfo.clipped = VK_TRUE;
-    createInfo.oldSwapchain = VK_NULL_HANDLE;
+    CreateInfo.preTransform = swapchainSupport.capabilities.currentTransform;
+    CreateInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
+    CreateInfo.presentMode = presentMode;
+    CreateInfo.clipped = VK_TRUE;
+    CreateInfo.oldSwapchain = VK_NULL_HANDLE;
 
-    if (vkCreateSwapchainKHR(m_device, &createInfo, nullptr, &m_swapchain) !=
+    VkSwapchainCreateInfoKHR CreateInfoTmp =
+        static_cast<VkSwapchainCreateInfoKHR>(CreateInfo);
+    if (vkCreateSwapchainKHR(m_device, &CreateInfoTmp, nullptr, &m_swapchain) !=
         VK_SUCCESS)
       throw std::runtime_error("failed to create swap chain!");
 
@@ -1400,8 +1402,8 @@ private:
     m_swapchainImages.resize(imageCount);
     vkGetSwapchainImagesKHR(m_device, m_swapchain, &imageCount,
                             m_swapchainImages.data());
-    m_swapchainImageFormat = surfaceFormat.format;
-    m_swapchainExtent = extent;
+    m_swapchainImageFormat = static_cast<VkFormat>(surfaceFormat.format);
+    m_swapchainExtent = static_cast<VkExtent2D>(extent);
   }
 
   void createSurface() {
@@ -1416,8 +1418,8 @@ private:
     // Each queue family has to have own VkDeviceQueueCreateInfo.
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos{};
     // This is the worst way of doing it. Rethink!
-    std::set<uint32_t> setUniqueInfoIdx = {indices.graphicsFamily.value(),
-                                           indices.presentFamily.value()};
+    std::set<uint32_t> setUniqueInfoIdx = {indices.GraphicsFamily.value(),
+                                           indices.PresentFamily.value()};
 
     float queuePriority{1.f};
     for (uint32_t queueFamily : setUniqueInfoIdx) {
@@ -1464,30 +1466,25 @@ private:
     // queue index and a pointer to the variable to store the queue handle in.
     // Because we're only creating a single queue from this family, we'll simply
     // use index 0.
-    vkGetDeviceQueue(m_device, indices.graphicsFamily.value(), 0,
+    vkGetDeviceQueue(m_device, indices.GraphicsFamily.value(), 0,
                      &m_graphicsQueue);
-    vkGetDeviceQueue(m_device, indices.presentFamily.value(), 0,
+    vkGetDeviceQueue(m_device, indices.PresentFamily.value(), 0,
                      &m_presentQueue);
   }
 
   void pickPhysicalDevice() {
-    uint32_t deviceCount{0};
-    vkEnumeratePhysicalDevices(m_instance, &deviceCount, nullptr);
-    if (!deviceCount)
-      throw std::runtime_error{"No physical device supports Vulkan!"};
+    std::vector<vk::PhysicalDevice> Devices =
+        m_instance.enumeratePhysicalDevices();
 
-    std::vector<VkPhysicalDevice> devices(deviceCount);
-    vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
-
-    for (const auto &device : devices)
-      if (isDeviceSuitable(device)) {
-        m_physicalDevice = device;
-        msaaSamples = getMaxUsableSampleCount();
-        break;
-      }
-
-    if (!m_physicalDevice)
+    auto FindIt =
+        std::find_if(Devices.begin(), Devices.end(), [this](auto &&Device) {
+          return isDeviceSuitable(Device);
+        });
+    if (FindIt == Devices.end())
       throw std::runtime_error("failed to find a suitable GPU!");
+
+    m_physicalDevice = *FindIt;
+    msaaSamples = getMaxUsableSampleCount();
   }
 
   // Checks which queue families are supported by the device and which one of
@@ -1495,13 +1492,13 @@ private:
   struct QueueFamilyIndices {
     // optional just because we may be want to select GPU with some family, but
     // it is not strictly necessary.
-    std::optional<uint32_t> graphicsFamily{};
+    std::optional<uint32_t> GraphicsFamily{};
     // Not every device can support presentation of the image, so need to
     // check that divece has proper family queue.
-    std::optional<uint32_t> presentFamily{};
+    std::optional<uint32_t> PresentFamily{};
 
     bool isComplete() {
-      return graphicsFamily.has_value() && presentFamily.has_value();
+      return GraphicsFamily.has_value() && PresentFamily.has_value();
     }
   };
 
@@ -1510,140 +1507,109 @@ private:
   // - surface format (pixel format, color space).
   // - available presentation mode.
   struct SwapchainSupportDetails {
-    VkSurfaceCapabilitiesKHR capabilities;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> presentModes;
+    vk::SurfaceCapabilitiesKHR capabilities;
+    std::vector<vk::SurfaceFormatKHR> formats;
+    std::vector<vk::PresentModeKHR> presentModes;
   };
 
   // This section covers how to query the structs that include this information.
-  SwapchainSupportDetails querySwapchainSupport(VkPhysicalDevice device) {
-    SwapchainSupportDetails details;
-
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface,
-                                              &details.capabilities);
-
-    // The next step is about querying the supported surface formats.
-    uint32_t formatCount{0};
-    vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount,
-                                         nullptr);
-    if (formatCount != 0) {
-      details.formats.resize(
-          formatCount); // can it fill an array and return formatCount at once?
-      vkGetPhysicalDeviceSurfaceFormatsKHR(device, m_surface, &formatCount,
-                                           details.formats.data());
-    }
-
-    // And finally, querying the supported presentation modes.
-    uint32_t presentModeCount{0};
-    vkGetPhysicalDeviceSurfacePresentModesKHR(device, m_surface,
-                                              &presentModeCount, nullptr);
-    if (presentModeCount != 0) {
-      details.presentModes.resize(presentModeCount);
-      vkGetPhysicalDeviceSurfacePresentModesKHR(
-          device, m_surface, &presentModeCount, details.presentModes.data());
-    }
-
-    return details;
+  SwapchainSupportDetails
+  querySwapchainSupport(vk::PhysicalDevice const &Device) {
+    return SwapchainSupportDetails{
+        .capabilities = Device.getSurfaceCapabilitiesKHR(m_surface),
+        .formats = Device.getSurfaceFormatsKHR(m_surface),
+        .presentModes = Device.getSurfacePresentModesKHR(m_surface)};
   }
 
-  QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
-    QueueFamilyIndices indices;
-    // Logic to find queue family indices to populate struct with.
-    uint32_t queueFamilyCount{0};
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-                                             nullptr);
+  QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice const &Device) {
+    QueueFamilyIndices Indices;
+    std::vector<vk::QueueFamilyProperties> QueueFamilies =
+        Device.getQueueFamilyProperties();
 
-    std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
-    vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount,
-                                             queueFamilies.data());
-    {
-      int i{0};
-      for (const auto &queueFamily : queueFamilies) {
-        // For better performance one queue famili has to support all requested
-        // queues at once, but we also can treat them as different families for
-        // unified approach.
-        if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
-          indices.graphicsFamily = i;
+    // TODO: rething this approach.
+    uint32_t i{0};
+    for (auto &&queueFamily : QueueFamilies) {
+      // For better performance one queue family has to support all requested
+      // queues at once, but we also can treat them as different families for
+      // unified approach.
+      if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
+        Indices.GraphicsFamily = i;
 
-        // Checks for presentation family support.
-        VkBool32 presentSupport{false};
-        vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_surface,
-                                             &presentSupport);
-        if (presentSupport)
-          indices.presentFamily = i;
+      // Checks for presentation family support.
+      if (Device.getSurfaceSupportKHR(i, m_surface))
+        Indices.PresentFamily = i;
 
-        // Not quite sure why the hell we need this early-break.
-        if (indices.isComplete())
-          break;
-        i++;
-      }
+      // Not quite sure why the hell we need this early-break.
+      if (Indices.isComplete())
+        return Indices;
+      ++i;
     }
-    return indices;
+
+    return QueueFamilyIndices{};
   }
 
   // We want to select format.
-  VkSurfaceFormatKHR chooseSwapSurfaceFormat(
-      std::vector<VkSurfaceFormatKHR> const &availableFormats) {
+  vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
+      std::vector<vk::SurfaceFormatKHR> const &AvailableFormats) {
     // Some words in Swap chain part:
     // https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain
-    for (auto const &availableFormat : availableFormats)
-      if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
-          availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-        return availableFormat;
+    auto FindIt = std::find_if(
+        AvailableFormats.begin(), AvailableFormats.end(), [](auto &&Format) {
+          return Format.format == vk::Format::eB8G8R8A8Srgb &&
+                 Format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
+        });
+    if (FindIt != AvailableFormats.end())
+      return *FindIt;
 
     std::cout << "The best format unavailable.\nUse available one.\n";
-    return availableFormats[0];
+    return AvailableFormats[0];
   }
 
   // Presentation mode represents the actual conditions for showing images to
   // the screen.
-  VkPresentModeKHR chooseSwapPresentMode(
-      std::vector<VkPresentModeKHR> const &availablePresentModes) {
-    for (auto const &availablePresentMode : availablePresentModes)
-      // simillar to FIFO, but when queue is full - replaces images.
-      // called triplebuffered.
-      if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR)
-        return availablePresentMode;
-    // this is vertical sync. images are shown from the queue and stored in
-    // queue. if queue is full - wait.
-    return VK_PRESENT_MODE_FIFO_KHR;
+  vk::PresentModeKHR chooseSwapPresentMode(
+      std::vector<vk::PresentModeKHR> const &AvailablePresentModes) {
+    auto FindIt =
+        std::find_if(AvailablePresentModes.begin(), AvailablePresentModes.end(),
+                     [](auto &&PresentMode) {
+                       return PresentMode == vk::PresentModeKHR::eMailbox;
+                     });
+    if (FindIt != AvailablePresentModes.end())
+      return *FindIt;
+
+    return vk::PresentModeKHR::eFifo;
   }
 
   // glfwWindows works with screen-coordinates. But Vulkan - with pixels.
   // And not always they are corresponsible with each other.
   // So we want to create a proper resolution.
-  VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR &capabilities) {
-    if (capabilities.currentExtent.width != UINT32_MAX)
-      return capabilities.currentExtent;
+  vk::Extent2D
+  chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &Capabilities) {
+    if (Capabilities.currentExtent.width != UINT32_MAX)
+      return Capabilities.currentExtent;
     else {
-      int width{0}, height{0};
-      glfwGetFramebufferSize(m_Window, &width, &height);
+      int Width{0}, Height{0};
+      glfwGetFramebufferSize(m_Window, &Width, &Height);
 
-      VkExtent2D actualExtent = {static_cast<uint32_t>(width),
-                                 static_cast<uint32_t>(height)};
-
-      actualExtent.width =
-          std::clamp(actualExtent.width, capabilities.minImageExtent.width,
-                     capabilities.maxImageExtent.width);
-      actualExtent.height =
-          std::clamp(actualExtent.height, capabilities.minImageExtent.height,
-                     capabilities.maxImageExtent.height);
-
-      return actualExtent;
+      uint32_t const RealW = std::clamp(static_cast<uint32_t>(Width),
+                                        Capabilities.minImageExtent.width,
+                                        Capabilities.maxImageExtent.width);
+      uint32_t const RealH = std::clamp(static_cast<uint32_t>(Height),
+                                        Capabilities.minImageExtent.height,
+                                        Capabilities.maxImageExtent.height);
+      return {RealW, RealH};
     }
   }
 
   // Checks if device is suitable for our extensions and purposes.
-  bool isDeviceSuitable(VkPhysicalDevice device) {
-    // name, type, supported Vulcan version can be quired via
+  bool isDeviceSuitable(vk::PhysicalDevice const &Device) {
+    // name, type, supported Vulkan version can be quired via
     // GetPhysicalDeviceProperties.
-    VkPhysicalDeviceProperties deviceProperties;
-    vkGetPhysicalDeviceProperties(device, &deviceProperties);
+    vk::PhysicalDeviceProperties DeviceProps = Device.getProperties();
 
     // optional features like texture compressing, 64bit floating operations,
-    // multiview-port and so one..
-    VkPhysicalDeviceFeatures deviceFeatures;
-    vkGetPhysicalDeviceFeatures(device, &deviceFeatures);
+    // multiview-port and so one...
+    vk::PhysicalDeviceFeatures DeviceFeat = Device.getFeatures();
 
     // Right now I have only one INTEGRATED GPU(on linux). But it will be more
     // suitable to calculate score and select preferred GPU with the highest
@@ -1658,30 +1624,26 @@ private:
     };
 
     // But we want to find out if GPU is graphicFamily. (?)
-    return findQueueFamilies(device).isComplete() &&
-           checkDeviceExtensionSupport(device) &&
-           swapchainSupport(querySwapchainSupport(device)) &&
-           deviceFeatures.samplerAnisotropy;
+    return findQueueFamilies(Device).isComplete() &&
+           checkDeviceExtensionSupport(Device) &&
+           swapchainSupport(querySwapchainSupport(Device)) &&
+           DeviceFeat.samplerAnisotropy;
     // All three ckecks are different. WTF!
   }
 
-  bool checkDeviceExtensionSupport(VkPhysicalDevice device) {
+  bool checkDeviceExtensionSupport(vk::PhysicalDevice const &Device) {
     // Some bad code. Rethink!
-    uint32_t extensionCount{0};
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
-                                         nullptr);
-
-    std::vector<VkExtensionProperties> availableExtensions(extensionCount);
-    vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount,
-                                         availableExtensions.data());
-
-    std::set<std::string> requiredExtensions(m_deviceExtensions.begin(),
-                                             m_deviceExtensions.end());
-
-    for (const auto &extension : availableExtensions)
-      requiredExtensions.erase(extension.extensionName);
-
-    return requiredExtensions.empty();
+    std::vector<vk::ExtensionProperties> AvailableExtensions =
+        Device.enumerateDeviceExtensionProperties();
+    std::unordered_set<std::string_view> UniqieExt;
+    std::for_each(AvailableExtensions.begin(), AvailableExtensions.end(),
+                  [&UniqieExt](auto &&Extension) {
+                    UniqieExt.insert(Extension.extensionName);
+                  });
+    return std::all_of(m_deviceExtensions.begin(), m_deviceExtensions.end(),
+                       [&UniqieExt](char const *RequireExt) {
+                         return UniqieExt.contains(RequireExt);
+                       });
   }
 
   vk::DebugUtilsMessengerCreateInfoEXT populateDebugMessengerInfo() {
@@ -1783,8 +1745,8 @@ private:
                     UniqueLayers.insert(LayerProperty.layerName);
                   });
     return std::all_of(m_validationLayers.begin(), m_validationLayers.end(),
-                       [&UniqueLayers](char const *RequereLayer) {
-                         return UniqueLayers.contains(RequereLayer);
+                       [&UniqueLayers](char const *RequireLayer) {
+                         return UniqueLayers.contains(RequireLayer);
                        });
   }
 
