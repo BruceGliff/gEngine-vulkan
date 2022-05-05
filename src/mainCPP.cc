@@ -171,7 +171,7 @@ class HelloTriangleApplication {
   VkImageView depthImageView;
 
   // For msaa.
-  VkSampleCountFlagBits msaaSamples = VK_SAMPLE_COUNT_1_BIT;
+  vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1;
   VkImage colorImage;
   VkDeviceMemory colorImageMemory;
   VkImageView colorImageView;
@@ -250,37 +250,28 @@ private:
         createImageView(colorImage, colorFormat, VK_IMAGE_ASPECT_COLOR_BIT, 1);
   }
 
-  VkSampleCountFlagBits getMaxUsableSampleCount() {
-    VkPhysicalDeviceProperties physicalDeviceProperties;
-    vkGetPhysicalDeviceProperties(m_physicalDevice, &physicalDeviceProperties);
+  vk::SampleCountFlagBits getMaxUsableSampleCount() {
+    using SC = vk::SampleCountFlagBits;
+    vk::PhysicalDeviceProperties DevProps = m_physicalDevice.getProperties();
 
-    VkSampleCountFlags counts =
-        physicalDeviceProperties.limits.framebufferColorSampleCounts &
-        physicalDeviceProperties.limits.framebufferDepthSampleCounts;
-    VkSampleCountFlagBits FlagBits = VK_SAMPLE_COUNT_1_BIT;
-    uint32_t Samples = 1;
+    vk::SampleCountFlags Counts = DevProps.limits.framebufferColorSampleCounts &
+                                  DevProps.limits.framebufferDepthSampleCounts;
+    SC FlagBits = SC::e1;
 
-    if (counts & VK_SAMPLE_COUNT_64_BIT) {
-      FlagBits = VK_SAMPLE_COUNT_64_BIT;
-      Samples = 64;
-    } else if (counts & VK_SAMPLE_COUNT_32_BIT) {
-      FlagBits = VK_SAMPLE_COUNT_32_BIT;
-      Samples = 32;
-    } else if (counts & VK_SAMPLE_COUNT_16_BIT) {
-      FlagBits = VK_SAMPLE_COUNT_16_BIT;
-      Samples = 16;
-    } else if (counts & VK_SAMPLE_COUNT_8_BIT) {
-      FlagBits = VK_SAMPLE_COUNT_8_BIT;
-      Samples = 8;
-    } else if (counts & VK_SAMPLE_COUNT_4_BIT) {
-      FlagBits = VK_SAMPLE_COUNT_4_BIT;
-      Samples = 4;
-    } else if (counts & VK_SAMPLE_COUNT_2_BIT) {
-      FlagBits = VK_SAMPLE_COUNT_2_BIT;
-      Samples = 2;
-    }
+    if (Counts & SC::e64)
+      FlagBits = SC::e64;
+    else if (Counts & SC::e32)
+      FlagBits = SC::e32;
+    else if (Counts & SC::e16)
+      FlagBits = SC::e16;
+    else if (Counts & SC::e8)
+      FlagBits = SC::e8;
+    else if (Counts & SC::e4)
+      FlagBits = SC::e4;
+    else if (Counts & SC::e2)
+      FlagBits = SC::e2;
 
-    std::cout << "Samples: " << Samples << '\n';
+    std::cout << "Samples: " << static_cast<uint32_t>(FlagBits) << '\n';
     return FlagBits;
   }
 
@@ -604,7 +595,7 @@ private:
     vkUnmapMemory(m_device, stagingBufferMemory);
 
     createImage(
-        Width, Height, mipLevels, VK_SAMPLE_COUNT_1_BIT,
+        Width, Height, mipLevels, vk::SampleCountFlagBits::e1,
         VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -623,23 +614,30 @@ private:
   }
 
   void createImage(uint32_t width, uint32_t height, uint32_t mipLevels,
-                   VkSampleCountFlagBits numSample, VkFormat format,
+                   vk::SampleCountFlagBits numSample, VkFormat format,
                    VkImageTiling tiling, VkImageUsageFlags usage,
                    VkMemoryPropertyFlags properties, VkImage &image,
                    VkDeviceMemory &imageMemory) {
-    VkImageCreateInfo imageInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-                                .imageType = VK_IMAGE_TYPE_2D,
-                                .format = format,
-                                .mipLevels = mipLevels,
-                                .arrayLayers = 1,
-                                .samples = numSample,
-                                .tiling = tiling,
-                                .usage = usage,
-                                .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-                                .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+
+    // vk::ImageCreateInfo ImageInfo { {}, vk::ImageType::e2D, format,
+    // vk::Extent3D{width, height, 1}, mipLevels, 1, numSample, tiling, usage,
+    // vk::SharingMode::eExclusive, {} };
+
+    VkImageCreateInfo imageInfo{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType = VK_IMAGE_TYPE_2D,
+        .format = format,
+        .mipLevels = mipLevels,
+        .arrayLayers = 1,
+        .samples = static_cast<VkSampleCountFlagBits>(numSample),
+        .tiling = tiling,
+        .usage = usage,
+        .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
     imageInfo.extent.width = width;
     imageInfo.extent.height = height;
     imageInfo.extent.depth = 1;
+
     if (vkCreateImage(m_device, &imageInfo, nullptr, &image) != VK_SUCCESS)
       throw std::runtime_error("failed to create image!");
 
@@ -1070,7 +1068,7 @@ private:
   void createRenderPass() {
     VkAttachmentDescription depthAttachment{
         .format = findDepthFormat(),
-        .samples = msaaSamples,
+        .samples = static_cast<VkSampleCountFlagBits>(msaaSamples),
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -1084,7 +1082,7 @@ private:
 
     VkAttachmentDescription colorAttachment{
         .format = m_swapchainImageFormat,
-        .samples = msaaSamples,
+        .samples = static_cast<VkSampleCountFlagBits>(msaaSamples),
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
@@ -1216,7 +1214,7 @@ private:
 
     VkPipelineMultisampleStateCreateInfo multisampling{
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = msaaSamples,
+        .rasterizationSamples = static_cast<VkSampleCountFlagBits>(msaaSamples),
         .sampleShadingEnable = VK_TRUE,
         .minSampleShading = .2f,           // Optional
         .pSampleMask = nullptr,            // Optional
