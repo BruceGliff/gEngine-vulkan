@@ -102,7 +102,7 @@ class HelloTriangleApplication {
   // Preferable device. Will be freed automatically.
   vk::PhysicalDevice m_physicalDevice;
   // Logical device.
-  VkDevice m_device{};
+  vk::Device m_device;
   // Queue automatically created with logical device, but we need to create a
   // handles. And queues automatically destroyed within device.
   VkQueue m_graphicsQueue{};
@@ -1411,63 +1411,38 @@ private:
   }
 
   void createLogicalDevice() {
-    QueueFamilyIndices indices = findQueueFamilies(m_physicalDevice);
+    // TODO rethink about using findQueueFamilieses once.
+    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
 
     // Each queue family has to have own VkDeviceQueueCreateInfo.
-    std::vector<VkDeviceQueueCreateInfo> queueCreateInfos{};
+    std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos{};
     // This is the worst way of doing it. Rethink!
-    std::set<uint32_t> setUniqueInfoIdx = {indices.GraphicsFamily.value(),
-                                           indices.PresentFamily.value()};
+    std::set<uint32_t> UniqueIdc = {Indices.GraphicsFamily.value(),
+                                    Indices.PresentFamily.value()};
+    // TODO: what is this?
+    std::array<float, 1> const QueuePriority = {1.f};
+    for (uint32_t Family : UniqueIdc)
+      QueueCreateInfos.push_back(
+          vk::DeviceQueueCreateInfo{{}, Family, QueuePriority});
 
-    float queuePriority{1.f};
-    for (uint32_t queueFamily : setUniqueInfoIdx) {
-      VkDeviceQueueCreateInfo queueCreateInfo{
-          .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-          .queueFamilyIndex = queueFamily,
-          .queueCount = 1,
-          .pQueuePriorities = &queuePriority,
-      };
-      queueCreateInfos.push_back(std::move(queueCreateInfo));
-    }
+    vk::PhysicalDeviceFeatures DevFeat{};
+    DevFeat.samplerAnisotropy = VK_TRUE;
+    DevFeat.sampleRateShading = VK_TRUE;
 
-    // Right now we do not need this.
-    VkPhysicalDeviceFeatures deviceFeatures{
-        .sampleRateShading = VK_TRUE,
-        .samplerAnisotropy = VK_TRUE,
-    };
-
-    // The main deviceIndo structure.
-    VkDeviceCreateInfo createInfo{
-        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-        .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
-        .pQueueCreateInfos = queueCreateInfos.data(),
-        .enabledLayerCount = 0,
-        .enabledExtensionCount =
-            static_cast<uint32_t>(m_deviceExtensions.size()),
-        .ppEnabledExtensionNames = m_deviceExtensions.data(),
-        .pEnabledFeatures = &deviceFeatures,
-    };
-    // To be compatible with older implementations, as new Vulcan version
-    // does not require ValidaionLayers
-    if (m_enableValidationLayers) {
-      createInfo.enabledLayerCount =
-          static_cast<uint32_t>(m_validationLayers.size());
-      createInfo.ppEnabledLayerNames = m_validationLayers.data();
-    }
-
-    if (vkCreateDevice(m_physicalDevice, &createInfo, nullptr, &m_device) !=
-        VK_SUCCESS)
-      throw std::runtime_error("failed to create logical device!");
+    // TODO: rethink this approach. May be use smth like std::optional.
+    std::vector<char const *> const &Layers = m_enableValidationLayers
+                                                  ? m_validationLayers
+                                                  : std::vector<char const *>{};
+    m_device = m_physicalDevice.createDevice(
+        {{}, QueueCreateInfos, Layers, m_deviceExtensions, &DevFeat});
 
     // We can use the vkGetDeviceQueue function to retrieve queue handles for
     // each queue family. The parameters are the logical device, queue family,
     // queue index and a pointer to the variable to store the queue handle in.
     // Because we're only creating a single queue from this family, we'll simply
     // use index 0.
-    vkGetDeviceQueue(m_device, indices.GraphicsFamily.value(), 0,
-                     &m_graphicsQueue);
-    vkGetDeviceQueue(m_device, indices.PresentFamily.value(), 0,
-                     &m_presentQueue);
+    m_graphicsQueue = m_device.getQueue(Indices.GraphicsFamily.value(), 0);
+    m_presentQueue = m_device.getQueue(Indices.PresentFamily.value(), 0);
   }
 
   void pickPhysicalDevice() {
