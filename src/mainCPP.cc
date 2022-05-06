@@ -737,30 +737,20 @@ private:
   }
 
   void createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding uboLayoutBinding{
-        .binding = 0,
-        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_VERTEX_BIT,
-        .pImmutableSamplers = nullptr};
+    // TODO samplers are null, but descriptorCount=1!.
+    // Even though there are no pImmutableSamplers in both LB, descriptorCount
+    // has to be at least 1. TODO: find out why.
+    vk::DescriptorSetLayoutBinding LayoutBindingUBO{
+        0, vk::DescriptorType::eUniformBuffer, 1,
+        vk::ShaderStageFlagBits::eVertex};
+    vk::DescriptorSetLayoutBinding LayoutBindingSampler{
+        1, vk::DescriptorType::eCombinedImageSampler, 1,
+        vk::ShaderStageFlagBits::eFragment};
 
-    VkDescriptorSetLayoutBinding samplerLayoutBinding{
-        .binding = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-        .descriptorCount = 1,
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .pImmutableSamplers = nullptr};
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {
-        uboLayoutBinding, samplerLayoutBinding};
+    std::array<vk::DescriptorSetLayoutBinding, 2> Bindings = {
+        LayoutBindingUBO, LayoutBindingSampler};
 
-    VkDescriptorSetLayoutCreateInfo layoutInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-        .bindingCount = static_cast<uint32_t>(bindings.size()),
-        .pBindings = bindings.data()};
-
-    if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr,
-                                    &descriptorSetLayout) != VK_SUCCESS)
-      throw std::runtime_error("failed to create descriptor set layout");
+    descriptorSetLayout = m_device.createDescriptorSetLayout({{}, Bindings});
   }
 
   void createVertexBuffer() {
