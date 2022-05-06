@@ -1034,79 +1034,64 @@ private:
   }
 
   void createRenderPass() {
-    VkAttachmentDescription depthAttachment{
-        .format = static_cast<VkFormat>(findDepthFormat()),
-        .samples = static_cast<VkSampleCountFlagBits>(msaaSamples),
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    vk::AttachmentDescription DepthAtt{
+        {},
+        findDepthFormat(),
+        msaaSamples,
+        vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eDontCare,
+        vk::AttachmentLoadOp::eDontCare,
+        vk::AttachmentStoreOp::eDontCare,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthStencilAttachmentOptimal};
+    vk::AttachmentReference DepthAttRef{
+        1, vk::ImageLayout::eDepthStencilAttachmentOptimal};
 
-    VkAttachmentReference depthAttachmentRef{
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL};
+    vk::AttachmentDescription ColorAtt{
+        {},
+        m_swapchainImageFormat,
+        msaaSamples,
+        vk::AttachmentLoadOp::eClear,
+        vk::AttachmentStoreOp::eStore,
+        vk::AttachmentLoadOp::eDontCare,
+        vk::AttachmentStoreOp::eDontCare,
+        vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eColorAttachmentOptimal};
+    vk::AttachmentReference ColorAttRef{
+        0, vk::ImageLayout::eColorAttachmentOptimal};
 
-    VkAttachmentDescription colorAttachment{
-        .format = static_cast<VkFormat>(m_swapchainImageFormat),
-        .samples = static_cast<VkSampleCountFlagBits>(msaaSamples),
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    vk::AttachmentDescription ColorAttResolve{{},
+                                              m_swapchainImageFormat,
+                                              vk::SampleCountFlagBits::e1,
+                                              vk::AttachmentLoadOp::eDontCare,
+                                              vk::AttachmentStoreOp::eStore,
+                                              vk::AttachmentLoadOp::eDontCare,
+                                              vk::AttachmentStoreOp::eDontCare,
+                                              vk::ImageLayout::eUndefined,
+                                              vk::ImageLayout::ePresentSrcKHR};
+    vk::AttachmentReference ColorAttResolveRef{
+        2, vk::ImageLayout::eColorAttachmentOptimal};
 
-    VkAttachmentReference colorAttachmentRef{
-        .attachment = 0, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
+    // TODO: empty input attachments(3rd operand).
+    vk::SubpassDescription Subpass{{},
+                                   vk::PipelineBindPoint::eGraphics,
+                                   {},
+                                   ColorAttRef,
+                                   ColorAttResolveRef,
+                                   &DepthAttRef};
 
-    VkAttachmentDescription colorAttachmentResolve{
-        .format = static_cast<VkFormat>(m_swapchainImageFormat),
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR};
+    using Fbits = vk::PipelineStageFlagBits;
+    vk::SubpassDependency Dependency{
+        VK_SUBPASS_EXTERNAL, 0,
+        Fbits::eColorAttachmentOutput | Fbits::eEarlyFragmentTests,
+        Fbits::eColorAttachmentOutput | Fbits::eEarlyFragmentTests,
+        vk::AccessFlagBits::eColorAttachmentWrite |
+            vk::AccessFlagBits::eDepthStencilAttachmentWrite};
 
-    VkAttachmentReference colorAttachmentResolveRef{
-        .attachment = 2, .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL};
-
-    VkSubpassDescription subpass{
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments = &colorAttachmentRef,
-        .pResolveAttachments = &colorAttachmentResolveRef,
-        .pDepthStencilAttachment = &depthAttachmentRef};
-
-    VkSubpassDependency dependency{
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT |
-                        VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT |
-                         VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT};
-
-    std::array<VkAttachmentDescription, 3> attachments = {
-        colorAttachment, depthAttachment, colorAttachmentResolve};
-    VkRenderPassCreateInfo renderPassInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .attachmentCount = static_cast<uint32_t>(attachments.size()),
-        .pAttachments = attachments.data(),
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-        .dependencyCount = 1,
-        .pDependencies = &dependency};
-
-    if (vkCreateRenderPass(m_device, &renderPassInfo, nullptr, &m_renderPass) !=
-        VK_SUCCESS) {
-      throw std::runtime_error("failed to create render pass!");
-    }
+    std::array<vk::AttachmentDescription, 3> Attachments{ColorAtt, DepthAtt,
+                                                         ColorAttResolve};
+    m_renderPass =
+        m_device.createRenderPass({{}, Attachments, Subpass, Dependency});
   }
 
   void createGraphicPipeline() {
