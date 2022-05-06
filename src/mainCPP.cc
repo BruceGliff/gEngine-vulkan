@@ -120,7 +120,7 @@ class HelloTriangleApplication {
   vk::Extent2D m_swapchainExtent;
   // ImageView used to specify how to treat VkImage.
   // For each VkImage we create VkImageView.
-  std::vector<VkImageView> m_swapchainImageViews;
+  std::vector<vk::ImageView> m_swapchainImageViews;
 
   VkRenderPass m_renderPass;
   // Used for an uniform variable.
@@ -1304,11 +1304,14 @@ private:
   }
 
   void createImageViews() {
-    m_swapchainImageViews.resize(m_swapchainImages.size());
-    for (uint32_t i = 0; i < m_swapchainImages.size(); i++)
-      m_swapchainImageViews[i] =
-          createImageView(m_swapchainImages[i], m_swapchainImageFormat,
-                          vk::ImageAspectFlagBits::eColor, 1);
+    std::vector<vk::ImageView> ImgViews;
+    std::transform(m_swapchainImages.begin(), m_swapchainImages.end(),
+                   std::back_inserter(ImgViews), [this](vk::Image const &Img) {
+                     return createImageView(Img, m_swapchainImageFormat,
+                                            vk::ImageAspectFlagBits::eColor, 1);
+                   });
+
+    m_swapchainImageViews = std::move(ImgViews);
   }
 
   void createSwapchain() {
@@ -1319,7 +1322,7 @@ private:
         chooseSwapSurfaceFormat(SwapchainSupport.formats);
     vk::PresentModeKHR PresentMode =
         chooseSwapPresentMode(SwapchainSupport.presentModes);
-    vk::Extent2D Extent = chooseSwapExtent(SwapchainSupport.capabilities);
+    m_swapchainExtent = chooseSwapExtent(SwapchainSupport.capabilities);
 
     // min images count in swap chain(plus one).
     uint32_t ImageCount = SwapchainSupport.capabilities.minImageCount + 1;
@@ -1340,7 +1343,6 @@ private:
                                             : vk::SharingMode::eExclusive;
 
     m_swapchainImageFormat = SurfFmt.format;
-    m_swapchainExtent = Extent;
     vk::SwapchainCreateInfoKHR const CreateInfo{
         {},
         m_surface,
