@@ -987,17 +987,9 @@ private:
 
   void createCommandPool() {
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physicalDevice);
-
-    VkCommandPoolCreateInfo poolInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, // Optional
-        .queueFamilyIndex = queueFamilyIndices.GraphicsFamily.value(),
-    };
-
-    if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) !=
-        VK_SUCCESS) {
-      throw std::runtime_error("failed to create command pool!");
-    }
+    m_commandPool = m_device.createCommandPool(
+        {vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+         queueFamilyIndices.GraphicsFamily.value()});
   }
 
   void createFramebuffers() {
