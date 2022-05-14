@@ -321,9 +321,8 @@ private:
 
     // As I understand this part is optional as we will take care of this in the
     // render pass.
-    transitionImageLayout(depthImage, static_cast<VkFormat>(DepthFmt),
-                          VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL, 1);
+    transitionImageLayout(depthImage, DepthFmt, vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eDepthStencilAttachmentOptimal, 1);
   }
 
   vk::Format findDepthFormat() {
@@ -334,9 +333,9 @@ private:
         vk::FormatFeatureFlagBits::eDepthStencilAttachment);
   }
 
-  bool hasStencilComponent(VkFormat format) {
-    return format == VK_FORMAT_D32_SFLOAT_S8_UINT ||
-           format == VK_FORMAT_D24_UNORM_S8_UINT;
+  bool hasStencilComponent(vk::Format Fmt) {
+    return Fmt == vk::Format::eD32SfloatS8Uint ||
+           Fmt == vk::Format::eD24UnormS8Uint;
   }
 
   // Takes a lists of candidate formats from most desireable to the least
@@ -404,63 +403,55 @@ private:
                         vk::ImageAspectFlagBits::eColor, mipLevels);
   }
 
-  void transitionImageLayout(VkImage image, VkFormat format,
-                             VkImageLayout oldLayout, VkImageLayout newLayout,
-                             uint32_t mipLevels) {
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+  void transitionImageLayout(vk::Image Image, vk::Format Fmt,
+                             vk::ImageLayout OldLayout,
+                             vk::ImageLayout NewLayout, uint32_t MipLvls) {
+    vk::CommandBuffer CmdBuffer = beginSingleTimeCommands();
 
-    VkImageMemoryBarrier barrier{.sType =
-                                     VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-                                 .oldLayout = oldLayout,
-                                 .newLayout = newLayout,
-                                 .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                 .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                 .image = image};
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = mipLevels;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
+    vk::ImageMemoryBarrier Barrier{
+        {}, {}, OldLayout, NewLayout,
+        {}, {}, Image,     {vk::ImageAspectFlagBits::eColor, 0, MipLvls, 0, 1}};
+    vk::PipelineStageFlags SrcStage;
+    vk::PipelineStageFlags DstStage;
 
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
-
-    if (newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-      barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-      if (hasStencilComponent(format))
-        barrier.subresourceRange.aspectMask |= VK_IMAGE_ASPECT_STENCIL_BIT;
+    using IL = vk::ImageLayout;
+    if (NewLayout == IL::eDepthStencilAttachmentOptimal) {
+      Barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
+      if (hasStencilComponent(Fmt))
+        Barrier.subresourceRange.aspectMask |=
+            vk::ImageAspectFlagBits::eStencil;
       // TODO this else causes validation error. But it is actually useless.
       // else
       //  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     }
 
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-        newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-      barrier.srcAccessMask = 0;
-      barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-      destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL &&
-               newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-      barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-      barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-      sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED &&
-               newLayout == VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL) {
-      barrier.srcAccessMask = 0;
-      barrier.dstAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT |
-                              VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-
-      sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-      destinationStage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+    using AF = vk::AccessFlagBits;
+    using PS = vk::PipelineStageFlagBits;
+    if (OldLayout == IL::eUndefined && NewLayout == IL::eTransferDstOptimal) {
+      Barrier.srcAccessMask = {};
+      Barrier.dstAccessMask = AF::eTransferWrite;
+      SrcStage = PS::eTopOfPipe;
+      DstStage = PS::eTransfer;
+    } else if (OldLayout == IL::eTransferDstOptimal &&
+               NewLayout == IL::eShaderReadOnlyOptimal) {
+      Barrier.srcAccessMask = AF::eTransferWrite;
+      Barrier.dstAccessMask = AF::eShaderRead;
+      SrcStage = PS::eTransfer;
+      DstStage = PS::eFragmentShader;
+    } else if (OldLayout == IL::eUndefined &&
+               NewLayout == IL::eDepthStencilAttachmentOptimal) {
+      Barrier.srcAccessMask = {};
+      Barrier.dstAccessMask =
+          AF::eDepthStencilAttachmentRead | AF::eDepthStencilAttachmentWrite;
+      SrcStage = PS::eTopOfPipe;
+      DstStage = PS::eEarlyFragmentTests;
     } else
       throw std::invalid_argument("unsupported layout transition!");
 
-    vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 0,
-                         nullptr, 0, nullptr, 1, &barrier);
+    CmdBuffer.pipelineBarrier(SrcStage, DstStage, {}, nullptr, nullptr,
+                              Barrier);
 
-    endSingleTimeCommands(commandBuffer);
+    endSingleTimeCommands(CmdBuffer);
   }
 
   void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width,
@@ -595,9 +586,9 @@ private:
                         vk::ImageUsageFlagBits::eSampled,
                     vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
-                          VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, mipLevels);
+    transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb,
+                          vk::ImageLayout::eUndefined,
+                          vk::ImageLayout::eTransferDstOptimal, mipLevels);
     copyBufferToImage(stagingBuffer, textureImage, Width, Height);
     // Transitioning to SHADER_READ_ONLY while generating mipmaps.
     generateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, Width, Height,
