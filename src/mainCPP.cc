@@ -240,12 +240,12 @@ private:
   void createColorResources() {
     vk::Format ColorFmt = m_swapchainImageFormat;
 
-    createImage(m_swapchainExtent.width, m_swapchainExtent.height, 1,
-                msaaSamples, ColorFmt, vk::ImageTiling::eOptimal,
-                vk::ImageUsageFlagBits::eTransientAttachment |
-                    vk::ImageUsageFlagBits::eColorAttachment,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, colorImage,
-                colorImageMemory);
+    std::tie(colorImage, colorImageMemory) =
+        createImage(m_swapchainExtent.width, m_swapchainExtent.height, 1,
+                    msaaSamples, ColorFmt, vk::ImageTiling::eOptimal,
+                    vk::ImageUsageFlagBits::eTransientAttachment |
+                        vk::ImageUsageFlagBits::eColorAttachment,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal);
     colorImageView = createImageView(colorImage, ColorFmt,
                                      vk::ImageAspectFlagBits::eColor, 1);
   }
@@ -310,11 +310,12 @@ private:
 
   void createDepthResources() {
     vk::Format DepthFmt = findDepthFormat();
-    createImage(m_swapchainExtent.width, m_swapchainExtent.height, 1,
-                msaaSamples, DepthFmt, vk::ImageTiling::eOptimal,
-                vk::ImageUsageFlagBits::eDepthStencilAttachment,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, depthImage,
-                depthImageMemory);
+
+    std::tie(depthImage, depthImageMemory) =
+        createImage(m_swapchainExtent.width, m_swapchainExtent.height, 1,
+                    msaaSamples, DepthFmt, vk::ImageTiling::eOptimal,
+                    vk::ImageUsageFlagBits::eDepthStencilAttachment,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal);
     depthImageView = createImageView(depthImage, DepthFmt,
                                      vk::ImageAspectFlagBits::eDepth, 1);
 
@@ -578,21 +579,21 @@ private:
         static_cast<uint32_t>(std::floor(std::log2(std::max(Width, Height)))) +
         1;
     createBuffer(ImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 vk::MemoryPropertyFlagBits::eHostVisible |
+                     vk::MemoryPropertyFlagBits::eHostCoherent,
                  stagingBuffer, stagingBufferMemory);
     void *data;
     vkMapMemory(m_device, stagingBufferMemory, 0, ImageSize, 0, &data);
     memcpy(data, Image.getRawData(), ImageSize);
     vkUnmapMemory(m_device, stagingBufferMemory);
 
-    createImage(Width, Height, mipLevels, vk::SampleCountFlagBits::e1,
-                vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-                vk::ImageUsageFlagBits::eTransferSrc |
-                    vk::ImageUsageFlagBits::eTransferDst |
-                    vk::ImageUsageFlagBits::eSampled,
-                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage,
-                textureImageMemory);
+    std::tie(textureImage, textureImageMemory) =
+        createImage(Width, Height, mipLevels, vk::SampleCountFlagBits::e1,
+                    vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
+                    vk::ImageUsageFlagBits::eTransferSrc |
+                        vk::ImageUsageFlagBits::eTransferDst |
+                        vk::ImageUsageFlagBits::eSampled,
+                    vk::MemoryPropertyFlagBits::eDeviceLocal);
 
     transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
                           VK_IMAGE_LAYOUT_UNDEFINED,
@@ -606,24 +607,24 @@ private:
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
   }
 
-  void createImage(uint32_t width, uint32_t height, uint32_t mipLevels,
-                   vk::SampleCountFlagBits numSample, vk::Format Fmt,
-                   vk::ImageTiling tiling, vk::ImageUsageFlags usage,
-                   VkMemoryPropertyFlags Props, VkImage &Image,
-                   VkDeviceMemory &ImageMem) {
+  std::pair<vk::Image, vk::DeviceMemory>
+  createImage(uint32_t Width, uint32_t Height, uint32_t MipLevls,
+              vk::SampleCountFlagBits NumSample, vk::Format Fmt,
+              vk::ImageTiling Tiling, vk::ImageUsageFlags Usage,
+              vk::MemoryPropertyFlags Props) {
     vk::ImageCreateInfo ImageInfo{{},        vk::ImageType::e2D,
-                                  Fmt,       {width, height, 1},
-                                  mipLevels, 1,
-                                  numSample, tiling,
-                                  usage,     vk::SharingMode::eExclusive};
-    // It supposes to be return value.
-    Image = m_device.createImage(ImageInfo);
+                                  Fmt,       {Width, Height, 1},
+                                  MipLevls,  1,
+                                  NumSample, Tiling,
+                                  Usage,     vk::SharingMode::eExclusive};
+    vk::Image Image = m_device.createImage(ImageInfo);
     vk::MemoryRequirements MemReq = m_device.getImageMemoryRequirements(Image);
-    // It supposes to be return value.
-    ImageMem = m_device.allocateMemory(
+    vk::DeviceMemory ImageMem = m_device.allocateMemory(
         {MemReq.size, findMemoryType(MemReq.memoryTypeBits, Props)});
 
     m_device.bindImageMemory(Image, ImageMem, 0);
+
+    return {Image, ImageMem};
   }
 
   VkCommandBuffer beginSingleTimeCommands() {
@@ -731,8 +732,8 @@ private:
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
       createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                   VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                   vk::MemoryPropertyFlagBits::eHostVisible |
+                       vk::MemoryPropertyFlagBits::eHostCoherent,
                    uniformBuffers[i], uniformBuffersMemory[i]);
     }
   }
@@ -760,8 +761,8 @@ private:
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     createBuffer(BuffSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 vk::MemoryPropertyFlagBits::eHostVisible |
+                     vk::MemoryPropertyFlagBits::eHostCoherent,
                  stagingBuffer, stagingBufferMemory);
 
     void *data;
@@ -769,10 +770,11 @@ private:
     memcpy(data, Vertices.data(), (size_t)BuffSize);
     vkUnmapMemory(m_device, stagingBufferMemory);
 
-    createBuffer(
-        BuffSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VertexBuffer, VertexBufferMemory);
+    createBuffer(BuffSize,
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+                 vk::MemoryPropertyFlagBits::eDeviceLocal, VertexBuffer,
+                 VertexBufferMemory);
     copyBuffer(stagingBuffer, VertexBuffer, BuffSize);
 
     vkDestroyBuffer(m_device, stagingBuffer, nullptr);
@@ -785,8 +787,8 @@ private:
     VkBuffer stagingBuffer;
     VkDeviceMemory stagingBufferMemory;
     createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                     VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 vk::MemoryPropertyFlagBits::eHostVisible |
+                     vk::MemoryPropertyFlagBits::eHostCoherent,
                  stagingBuffer, stagingBufferMemory);
 
     void *data;
@@ -795,10 +797,11 @@ private:
            bufferSize); // TODO why just data == Indices.data()?
     vkUnmapMemory(m_device, stagingBufferMemory);
 
-    createBuffer(
-        bufferSize,
-        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, IndexBuffer, IndexBufferMemory);
+    createBuffer(bufferSize,
+                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                     VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+                 vk::MemoryPropertyFlagBits::eDeviceLocal, IndexBuffer,
+                 IndexBufferMemory);
 
     copyBuffer(stagingBuffer, IndexBuffer, bufferSize);
 
@@ -869,8 +872,8 @@ private:
   }
 
   void createBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
-                    VkMemoryPropertyFlags Properties, VkBuffer /*OUT*/ &Buffer,
-                    VkDeviceMemory /*OUT*/ &Memory) {
+                    vk::MemoryPropertyFlags Properties,
+                    VkBuffer /*OUT*/ &Buffer, VkDeviceMemory /*OUT*/ &Memory) {
     // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
     // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
     // queue family specially with TRANSFER_BIT.
@@ -1182,15 +1185,14 @@ private:
   }
 
   // Finds right type of memory to use.
-  uint32_t findMemoryType(uint32_t typeFilter,
-                          VkMemoryAllocateFlags Properties) {
-    VkPhysicalDeviceMemoryProperties MemProperties;
-    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &MemProperties);
+  uint32_t findMemoryType(uint32_t TypeFilter,
+                          vk::MemoryPropertyFlags Properties) {
+    vk::PhysicalDeviceMemoryProperties MemProps =
+        m_physicalDevice.getMemoryProperties();
 
-    for (uint32_t i = 0; i < MemProperties.memoryTypeCount; i++)
-      if ((typeFilter & (1 << i)) &&
-          (MemProperties.memoryTypes[i].propertyFlags & Properties) ==
-              Properties)
+    for (uint32_t i = 0; i != MemProps.memoryTypeCount; ++i)
+      if ((TypeFilter & (1 << i)) &&
+          (MemProps.memoryTypes[i].propertyFlags & Properties) == Properties)
         return i;
 
     throw std::runtime_error("failed to find suitable memory type!");
