@@ -129,7 +129,7 @@ class HelloTriangleApplication {
   vk::Pipeline m_graphicsPipeline;
 
   // A framebuffer object references all of the VkImageView objects.
-  std::vector<VkFramebuffer> m_swapChainFramebuffers;
+  std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
   VkCommandPool m_commandPool;
 
@@ -987,27 +987,24 @@ private:
   }
 
   void createFramebuffers() {
-    m_swapChainFramebuffers.resize(m_swapchainImageViews.size());
-    int idx{0};
-    for (auto &&ImageView : m_swapchainImageViews) {
-      // Order of the attachments is essential!
-      // It is reverse from created in createRenderPass
-      std::array<VkImageView, 3> attachments = {colorImageView, depthImageView,
-                                                ImageView};
-      VkFramebufferCreateInfo framebufferInfo{
-          .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-          .renderPass = m_renderPass,
-          .attachmentCount = static_cast<uint32_t>(attachments.size()),
-          .pAttachments = attachments.data(),
-          .width = m_swapchainExtent.width,
-          .height = m_swapchainExtent.height,
-          .layers = 1};
+    // Order of the attachments is essential!
+    // It is reverse from created in createRenderPass
+    std::array<vk::ImageView, 3> Atts = {colorImageView, depthImageView, {}};
+    std::vector<vk::Framebuffer> swapchainBuffrs;
+    std::transform(m_swapchainImageViews.begin(), m_swapchainImageViews.end(),
+                   std::back_inserter(swapchainBuffrs),
+                   [&Atts, this](vk::ImageView &ImgV) {
+                     Atts[2] = ImgV;
+                     return m_device.createFramebuffer(
+                         {{},
+                          m_renderPass,
+                          Atts,
+                          m_swapchainExtent.width,
+                          m_swapchainExtent.height,
+                          1});
+                   });
 
-      if (vkCreateFramebuffer(m_device, &framebufferInfo, nullptr,
-                              &m_swapChainFramebuffers[idx++]) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create framebuffer!");
-      }
-    }
+    m_swapChainFramebuffers = std::move(swapchainBuffrs);
   }
 
   void createRenderPass() {
