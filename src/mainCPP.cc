@@ -454,25 +454,21 @@ private:
     endSingleTimeCommands(CmdBuffer);
   }
 
-  void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width,
-                         uint32_t height) {
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
+  void copyBufferToImage(vk::Buffer Buffer, vk::Image Image, uint32_t Width,
+                         uint32_t Height) {
+    vk::CommandBuffer CmdBuff = beginSingleTimeCommands();
 
-    VkBufferImageCopy region{
-        .bufferOffset = 0, .bufferRowLength = 0, .bufferImageHeight = 0};
-    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    region.imageSubresource.mipLevel = 0;
-    region.imageSubresource.baseArrayLayer = 0;
-    region.imageSubresource.layerCount = 1;
+    vk::BufferImageCopy Reg{
+        0,         0,
+        0,         {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
+        {0, 0, 0}, {Width, Height, 1}};
+    CmdBuff.copyBufferToImage(Buffer, Image,
+                              vk::ImageLayout::eTransferDstOptimal, Reg);
 
-    region.imageOffset = {0, 0, 0};
-    region.imageExtent = {width, height, 1};
-    vkCmdCopyBufferToImage(commandBuffer, buffer, image,
-                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
-
-    endSingleTimeCommands(commandBuffer);
+    endSingleTimeCommands(CmdBuff);
   }
 
+  // TODO: C++ style.
   void generateMipmaps(VkImage image, VkFormat imageFormat, uint32_t Width,
                        uint32_t Height, uint32_t mipLevels) {
 
@@ -560,23 +556,21 @@ private:
     ImagePath /= "assets/textures/viking_room.png";
     image Image(ImagePath.generic_string());
 
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-
     uint32_t const ImageSize = Image.getSize();
     uint32_t const Width = Image.getWidth();
     uint32_t const Height = Image.getHeight();
     mipLevels =
         static_cast<uint32_t>(std::floor(std::log2(std::max(Width, Height)))) +
         1;
-    createBuffer(ImageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 vk::MemoryPropertyFlagBits::eHostVisible |
-                     vk::MemoryPropertyFlagBits::eHostCoherent,
-                 stagingBuffer, stagingBufferMemory);
-    void *data;
-    vkMapMemory(m_device, stagingBufferMemory, 0, ImageSize, 0, &data);
-    memcpy(data, Image.getRawData(), ImageSize);
-    vkUnmapMemory(m_device, stagingBufferMemory);
+
+    auto [StagingBuff, StagingBuffMem] =
+        createBuffer(ImageSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible |
+                         vk::MemoryPropertyFlagBits::eHostCoherent);
+
+    void *Data = m_device.mapMemory(StagingBuffMem, 0, ImageSize);
+    memcpy(Data, Image.getRawData(), ImageSize);
+    m_device.unmapMemory(StagingBuffMem);
 
     std::tie(textureImage, textureImageMemory) =
         createImage(Width, Height, mipLevels, vk::SampleCountFlagBits::e1,
@@ -589,13 +583,13 @@ private:
     transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb,
                           vk::ImageLayout::eUndefined,
                           vk::ImageLayout::eTransferDstOptimal, mipLevels);
-    copyBufferToImage(stagingBuffer, textureImage, Width, Height);
+    copyBufferToImage(StagingBuff, textureImage, Width, Height);
     // Transitioning to SHADER_READ_ONLY while generating mipmaps.
     generateMipmaps(textureImage, VK_FORMAT_R8G8B8A8_SRGB, Width, Height,
                     mipLevels);
 
-    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+    m_device.destroyBuffer(StagingBuff);
+    m_device.freeMemory(StagingBuffMem);
   }
 
   std::pair<vk::Image, vk::DeviceMemory>
@@ -721,12 +715,11 @@ private:
     uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
-    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                   vk::MemoryPropertyFlagBits::eHostVisible |
-                       vk::MemoryPropertyFlagBits::eHostCoherent,
-                   uniformBuffers[i], uniformBuffersMemory[i]);
-    }
+    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
+      std::tie(uniformBuffers[i], uniformBuffersMemory[i]) =
+          createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+                       vk::MemoryPropertyFlagBits::eHostVisible |
+                           vk::MemoryPropertyFlagBits::eHostCoherent);
   }
 
   void createDescriptorSetLayout() {
@@ -747,68 +740,61 @@ private:
   }
 
   void createVertexBuffer() {
-    VkDeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
+    vk::DeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
 
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(BuffSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 vk::MemoryPropertyFlagBits::eHostVisible |
-                     vk::MemoryPropertyFlagBits::eHostCoherent,
-                 stagingBuffer, stagingBufferMemory);
+    auto [StagingBuff, StagingBuffMem] =
+        createBuffer(BuffSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible |
+                         vk::MemoryPropertyFlagBits::eHostCoherent);
 
-    void *data;
-    vkMapMemory(m_device, stagingBufferMemory, 0, BuffSize, 0, &data);
-    memcpy(data, Vertices.data(), (size_t)BuffSize);
-    vkUnmapMemory(m_device, stagingBufferMemory);
+    void *Data = m_device.mapMemory(StagingBuffMem, 0, BuffSize);
+    memcpy(Data, Vertices.data(), (size_t)BuffSize);
+    m_device.unmapMemory(StagingBuffMem);
 
-    createBuffer(BuffSize,
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                     VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-                 vk::MemoryPropertyFlagBits::eDeviceLocal, VertexBuffer,
-                 VertexBufferMemory);
-    copyBuffer(stagingBuffer, VertexBuffer, BuffSize);
+    std::tie(VertexBuffer, VertexBufferMemory) =
+        createBuffer(BuffSize,
+                     vk::BufferUsageFlagBits::eTransferDst |
+                         vk::BufferUsageFlagBits::eVertexBuffer,
+                     vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+    copyBuffer(StagingBuff, VertexBuffer, BuffSize);
+
+    m_device.destroyBuffer(StagingBuff);
+    m_device.freeMemory(StagingBuffMem);
   }
 
   void createIndexBuffer() {
-    VkDeviceSize bufferSize = sizeof(uint32_t) * Indices.size();
+    vk::DeviceSize BuffSize = sizeof(uint32_t) * Indices.size();
 
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 vk::MemoryPropertyFlagBits::eHostVisible |
-                     vk::MemoryPropertyFlagBits::eHostCoherent,
-                 stagingBuffer, stagingBufferMemory);
+    auto [StagingBuff, StagingBuffMem] =
+        createBuffer(BuffSize, vk::BufferUsageFlagBits::eTransferSrc,
+                     vk::MemoryPropertyFlagBits::eHostVisible |
+                         vk::MemoryPropertyFlagBits::eHostCoherent);
+    void *Data = m_device.mapMemory(StagingBuffMem, 0, BuffSize);
+    memcpy(Data, Indices.data(),
+           BuffSize); // TODO why just data == Indices.data()?
+    m_device.unmapMemory(StagingBuffMem);
 
-    void *data;
-    vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, Indices.data(),
-           bufferSize); // TODO why just data == Indices.data()?
-    vkUnmapMemory(m_device, stagingBufferMemory);
+    std::tie(IndexBuffer, IndexBufferMemory) =
+        createBuffer(BuffSize,
+                     vk::BufferUsageFlagBits::eTransferDst |
+                         vk::BufferUsageFlagBits::eIndexBuffer,
+                     vk::MemoryPropertyFlagBits::eDeviceLocal);
 
-    createBuffer(bufferSize,
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                     VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                 vk::MemoryPropertyFlagBits::eDeviceLocal, IndexBuffer,
-                 IndexBufferMemory);
+    copyBuffer(StagingBuff, IndexBuffer, BuffSize);
 
-    copyBuffer(stagingBuffer, IndexBuffer, bufferSize);
-
-    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+    m_device.destroyBuffer(StagingBuff);
+    m_device.freeMemory(StagingBuffMem);
   }
 
-  void copyBuffer(VkBuffer srcBuff, VkBuffer dstBuff, VkDeviceSize Size) {
+  void copyBuffer(vk::Buffer Src, vk::Buffer Dst, vk::DeviceSize Size) {
     // TODO. Maybe separate command pool is to be created for these kinds of
     // short-lived buffers, because the implementation may be able to apply
     // memory allocation optimizations. VK_COMMAND_POOL_CREATE_TRANSIENT_BIT for
     // commandPool generation in that case.
-    VkCommandBuffer commandBuffer = beginSingleTimeCommands();
-    VkBufferCopy copyRegion{.size = Size};
-    vkCmdCopyBuffer(commandBuffer, srcBuff, dstBuff, 1, &copyRegion);
-    endSingleTimeCommands(commandBuffer);
+    vk::CommandBuffer CmdBuff = beginSingleTimeCommands();
+    CmdBuff.copyBuffer(Src, Dst, vk::BufferCopy{{}, {}, Size});
+    endSingleTimeCommands(CmdBuff);
   }
 
   // Creates new swap chain when smth goes wrong or resizing.
@@ -862,36 +848,21 @@ private:
     vkUnmapMemory(m_device, uniformBuffersMemory[currentImage]);
   }
 
-  void createBuffer(VkDeviceSize Size, VkBufferUsageFlags Usage,
-                    vk::MemoryPropertyFlags Properties,
-                    VkBuffer /*OUT*/ &Buffer, VkDeviceMemory /*OUT*/ &Memory) {
+  std::pair<vk::Buffer, vk::DeviceMemory>
+  createBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage,
+               vk::MemoryPropertyFlags Properties) {
     // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
     // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
     // queue family specially with TRANSFER_BIT.
-    VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                                  .size = Size,
-                                  .usage = Usage,
-                                  .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+    vk::Buffer Buffer =
+        m_device.createBuffer({{}, Size, Usage, vk::SharingMode::eExclusive});
+    vk::MemoryRequirements MemReq =
+        m_device.getBufferMemoryRequirements(Buffer);
+    vk::DeviceMemory Memory = m_device.allocateMemory(
+        {MemReq.size, findMemoryType(MemReq.memoryTypeBits, Properties)});
+    m_device.bindBufferMemory(Buffer, Memory, 0);
 
-    if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &Buffer) != VK_SUCCESS) {
-      throw std::runtime_error("failed to create buffer");
-    }
-
-    VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device, Buffer, &memRequirements);
-
-    VkMemoryAllocateInfo allocInfo{
-        .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-        .allocationSize = memRequirements.size,
-        .memoryTypeIndex =
-            findMemoryType(memRequirements.memoryTypeBits, Properties)};
-
-    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &Memory) !=
-        VK_SUCCESS) {
-      throw std::runtime_error("failed to allocate buffer memory");
-    }
-
-    vkBindBufferMemory(m_device, Buffer, Memory, 0);
+    return std::make_pair(Buffer, Memory);
   }
 
   void createSyncObjects() {
