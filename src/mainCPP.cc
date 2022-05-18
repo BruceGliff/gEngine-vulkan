@@ -157,7 +157,7 @@ class HelloTriangleApplication {
   vk::DescriptorSetLayout descriptorSetLayout;
 
   VkDescriptorPool descriptorPool;
-  std::vector<VkDescriptorSet> descriptorSets;
+  std::vector<vk::DescriptorSet> descriptorSets;
 
   uint32_t mipLevels;
   VkImage textureImage;
@@ -626,49 +626,27 @@ private:
   }
 
   void createDescriptorSets() {
-    std::vector<VkDescriptorSetLayout> layouts(
-        MAX_FRAMES_IN_FLIGHT,
-        static_cast<VkDescriptorSetLayout>(descriptorSetLayout));
-    VkDescriptorSetAllocateInfo allocInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
-        .descriptorPool = descriptorPool,
-        .descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
-        .pSetLayouts = layouts.data()};
+    std::vector<vk::DescriptorSetLayout> Layouts(MAX_FRAMES_IN_FLIGHT,
+                                                 descriptorSetLayout);
 
-    descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
-    if (vkAllocateDescriptorSets(m_device, &allocInfo, descriptorSets.data()) !=
-        VK_SUCCESS)
-      throw std::runtime_error("failed to allocate descriptor sets");
+    descriptorSets = m_device.allocateDescriptorSets({descriptorPool, Layouts});
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      VkDescriptorBufferInfo bufferInfo{.buffer = uniformBuffers[i],
-                                        .offset = 0,
-                                        .range = sizeof(UniformBufferObject)};
-      VkDescriptorImageInfo imageInfo{
-          .sampler = textureSampler,
-          .imageView = textureImageView,
-          .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL};
-      std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-      descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      descriptorWrites[0].dstSet = descriptorSets[i];
-      descriptorWrites[0].dstBinding = 0;
-      descriptorWrites[0].dstArrayElement = 0;
-      descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      descriptorWrites[0].descriptorCount = 1;
-      descriptorWrites[0].pBufferInfo = &bufferInfo;
+      vk::DescriptorBufferInfo BufInfo{uniformBuffers[i], 0,
+                                        sizeof(UniformBufferObject)};
+      // TODO. move from loop.
+      vk::DescriptorImageInfo ImgInfo{textureSampler, textureImageView,
+                                      vk::ImageLayout::eShaderReadOnlyOptimal};
 
-      descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-      descriptorWrites[1].dstSet = descriptorSets[i];
-      descriptorWrites[1].dstBinding = 1;
-      descriptorWrites[1].dstArrayElement = 0;
-      descriptorWrites[1].descriptorType =
-          VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      descriptorWrites[1].descriptorCount = 1;
-      descriptorWrites[1].pImageInfo = &imageInfo;
+      vk::WriteDescriptorSet BufWrite{
+          descriptorSets[i], 0,       0, vk::DescriptorType::eUniformBuffer,
+          nullptr,           BufInfo};
+      vk::WriteDescriptorSet ImgWrite{descriptorSets[i],1,0,vk::DescriptorType::eCombinedImageSampler,ImgInfo,nullptr};
 
-      vkUpdateDescriptorSets(m_device,
-                             static_cast<uint32_t>(descriptorWrites.size()),
-                             descriptorWrites.data(), 0, nullptr);
+      std::array<vk::WriteDescriptorSet, 2> descriptorWrites{
+          std::move(BufWrite), std::move(ImgWrite)};
+
+      m_device.updateDescriptorSets(descriptorWrites, nullptr);
     }
   }
 
@@ -910,9 +888,12 @@ private:
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
     vkCmdBindIndexBuffer(commandBuffer, IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            m_pipelineLayout, 0, 1,
-                            &descriptorSets[currentFrame], 0, nullptr);
+    // TODO. temprorary.
+    vk::CommandBuffer CmdBuff = commandBuffer;
+    CmdBuff.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
+                               m_pipelineLayout, 0,
+                               descriptorSets[currentFrame], nullptr);
+
     // vertexCount, instanceCount, fitstVertex, firstInstance
     vkCmdDrawIndexed(commandBuffer, Indices.size(), 1, 0, 0, 0);
     // vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0,
