@@ -133,7 +133,7 @@ class HelloTriangleApplication {
 
   VkCommandPool m_commandPool;
 
-  std::vector<VkCommandBuffer> m_commandBuffers;
+  std::vector<vk::CommandBuffer> m_commandBuffers;
 
   std::vector<VkSemaphore> m_imageAvailableSemaphore;
   std::vector<VkSemaphore> m_renderFinishedSemaphore;
@@ -633,15 +633,20 @@ private:
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
       vk::DescriptorBufferInfo BufInfo{uniformBuffers[i], 0,
-                                        sizeof(UniformBufferObject)};
+                                       sizeof(UniformBufferObject)};
       // TODO. move from loop.
       vk::DescriptorImageInfo ImgInfo{textureSampler, textureImageView,
                                       vk::ImageLayout::eShaderReadOnlyOptimal};
 
       vk::WriteDescriptorSet BufWrite{
-          descriptorSets[i], 0,       0, vk::DescriptorType::eUniformBuffer,
+          descriptorSets[i], 0,      0, vk::DescriptorType::eUniformBuffer,
           nullptr,           BufInfo};
-      vk::WriteDescriptorSet ImgWrite{descriptorSets[i],1,0,vk::DescriptorType::eCombinedImageSampler,ImgInfo,nullptr};
+      vk::WriteDescriptorSet ImgWrite{descriptorSets[i],
+                                      1,
+                                      0,
+                                      vk::DescriptorType::eCombinedImageSampler,
+                                      ImgInfo,
+                                      nullptr};
 
       std::array<vk::WriteDescriptorSet, 2> descriptorWrites{
           std::move(BufWrite), std::move(ImgWrite)};
@@ -840,17 +845,9 @@ private:
   }
 
   void createCommandBuffers() {
-    m_commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-
-    VkCommandBufferAllocateInfo allocInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = m_commandPool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = (uint32_t)m_commandBuffers.size()};
-
-    if (vkAllocateCommandBuffers(m_device, &allocInfo,
-                                 m_commandBuffers.data()) != VK_SUCCESS)
-      throw std::runtime_error("failed to allocate command buffers!");
+    uint32_t const Frames = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    m_commandBuffers = m_device.allocateCommandBuffers(
+        {m_commandPool, vk::CommandBufferLevel::ePrimary, Frames});
   }
 
   void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
@@ -1548,14 +1545,16 @@ private:
     VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore[currentFrame]};
     VkPipelineStageFlags waitStages[] = {
         VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                            .waitSemaphoreCount = 1,
-                            .pWaitSemaphores = waitSemaphores,
-                            .pWaitDstStageMask = waitStages,
-                            .commandBufferCount = 1,
-                            .pCommandBuffers = &m_commandBuffers[currentFrame],
-                            .signalSemaphoreCount = 1,
-                            .pSignalSemaphores = signalSemaphores};
+    VkSubmitInfo submitInfo{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = waitSemaphores,
+        .pWaitDstStageMask = waitStages,
+        .commandBufferCount = 1,
+        // TODO. temporary
+        .pCommandBuffers = (VkCommandBuffer *)&m_commandBuffers[currentFrame],
+        .signalSemaphoreCount = 1,
+        .pSignalSemaphores = signalSemaphores};
 
     if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo,
                       m_inFlightFence[currentFrame]) != VK_SUCCESS) {
