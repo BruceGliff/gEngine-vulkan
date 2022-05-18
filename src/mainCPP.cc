@@ -357,31 +357,25 @@ private:
   }
 
   void createTextureSampler() {
-    VkPhysicalDeviceProperties properties{};
     // TODO retrieve properties once in program
-    vkGetPhysicalDeviceProperties(m_physicalDevice, &properties);
+    vk::PhysicalDeviceProperties Props = m_physicalDevice.getProperties();
 
-    VkSamplerCreateInfo samplerInfo{
-        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
-        .magFilter = VK_FILTER_NEAREST, // VK_FILTER_LINEAR
-        .minFilter = VK_FILTER_LINEAR,
-        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
-        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
-        .mipLodBias = 0.f,
-        .anisotropyEnable = VK_TRUE,
-        .maxAnisotropy = properties.limits.maxSamplerAnisotropy,
-        .compareEnable = VK_FALSE,
-        .compareOp = VK_COMPARE_OP_ALWAYS,
-        .minLod = 0.f,
-        .maxLod = static_cast<float>(mipLevels),
-        .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
-        .unnormalizedCoordinates = VK_FALSE};
-
-    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &textureSampler) !=
-        VK_SUCCESS)
-      throw std::runtime_error("failed to create texture sampler!");
+    textureSampler = m_device.createSampler({{},
+                                             vk::Filter::eNearest,
+                                             vk::Filter::eLinear,
+                                             vk::SamplerMipmapMode::eLinear,
+                                             vk::SamplerAddressMode::eRepeat,
+                                             vk::SamplerAddressMode::eRepeat,
+                                             vk::SamplerAddressMode::eRepeat,
+                                             0.f,
+                                             VK_TRUE,
+                                             Props.limits.maxSamplerAnisotropy,
+                                             VK_FALSE,
+                                             vk::CompareOp::eAlways,
+                                             0.f,
+                                             static_cast<float>(mipLevels),
+                                             vk::BorderColor::eIntOpaqueBlack,
+                                             VK_FALSE});
   }
 
   vk::ImageView createImageView(vk::Image const &Image,
