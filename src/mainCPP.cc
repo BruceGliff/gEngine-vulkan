@@ -691,14 +691,15 @@ private:
   }
 
   void createUniformBuffers() {
-    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
+    vk::DeviceSize BuffSize = sizeof(UniformBufferObject);
 
+    // TODO. rethink this approach.
     uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
       std::tie(uniformBuffers[i], uniformBuffersMemory[i]) =
-          createBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+          createBuffer(BuffSize, vk::BufferUsageFlagBits::eUniformBuffer,
                        vk::MemoryPropertyFlagBits::eHostVisible |
                            vk::MemoryPropertyFlagBits::eHostCoherent);
   }
