@@ -673,21 +673,13 @@ private:
   }
 
   void createDescriptorPool() {
-    std::array<VkDescriptorPoolSize, 2> poolSizes{};
-    poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    uint32_t const Frames = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
-    VkDescriptorPoolCreateInfo poolInfo{
-        .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-        .maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT),
-        .poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
-        .pPoolSizes = poolSizes.data()};
-
-    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &descriptorPool) !=
-        VK_SUCCESS)
-      throw std::runtime_error("failed to create descriptor pool");
+    std::array<vk::DescriptorPoolSize, 2> PoolSizes = {
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, Frames},
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler,
+                               Frames}};
+    descriptorPool = m_device.createDescriptorPool({{}, Frames, PoolSizes});
   }
 
   void createUniformBuffers() {
