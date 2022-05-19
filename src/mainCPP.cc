@@ -26,6 +26,7 @@
 #include <cstring>
 #include <iostream>
 #include <optional>
+#include <ranges>
 #include <set>
 #include <stdexcept>
 #include <unordered_map>
@@ -823,25 +824,19 @@ private:
   }
 
   void createSyncObjects() {
-    m_imageAvailableSemaphore.resize(MAX_FRAMES_IN_FLIGHT);
-    m_renderFinishedSemaphore.resize(MAX_FRAMES_IN_FLIGHT);
-    m_inFlightFence.resize(MAX_FRAMES_IN_FLIGHT);
+    std::vector<VkSemaphore> sem1;
+    std::vector<VkSemaphore> sem2;
+    std::vector<VkFence> fence;
 
-    VkSemaphoreCreateInfo semaphoreInfo{
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-
-    VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
-                                .flags = VK_FENCE_CREATE_SIGNALED_BIT};
-
-    for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
-      if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
-                            &m_imageAvailableSemaphore[i]) != VK_SUCCESS ||
-          vkCreateSemaphore(m_device, &semaphoreInfo, nullptr,
-                            &m_renderFinishedSemaphore[i]) != VK_SUCCESS ||
-          vkCreateFence(m_device, &fenceInfo, nullptr, &m_inFlightFence[i]) !=
-              VK_SUCCESS) {
-        throw std::runtime_error("failed to create semaphores!");
-      }
+    for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
+      sem1.push_back(m_device.createSemaphore({}));
+      sem2.push_back(m_device.createSemaphore({}));
+      fence.push_back(
+          m_device.createFence({vk::FenceCreateFlagBits::eSignaled}));
+    }
+    m_imageAvailableSemaphore = std::move(sem1);
+    m_renderFinishedSemaphore = std::move(sem2);
+    m_inFlightFence = std::move(fence);
   }
 
   void createCommandBuffers() {
