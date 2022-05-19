@@ -38,27 +38,30 @@
 // vkCreateDebugUtilsMessengerEXT, but as this function is an extension, it is
 // not automatically loaded. So we have to look up by ourselfes via
 // vkGetInstanceProcAddr.
-// TODO think about C++ style.
-VkResult createDebugUtilsMessengerEXT(
-    vk::Instance const &Instance,
-    VkDebugUtilsMessengerCreateInfoEXT const *pCreateInfo,
+// TODO this dbg creation has to be in two steps to avoid I = Instance:
+//  1 - find pnfVk...
+//  2 - call func(...) which would be pnfVk..
+VkResult vkCreateDebugUtilsMessengerEXT(
+    VkInstance Instance, VkDebugUtilsMessengerCreateInfoEXT const *pCreateInfo,
     VkAllocationCallbacks const *pAllocator,
     VkDebugUtilsMessengerEXT *pDebugMessenger) {
-  auto func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-      Instance, "vkCreateDebugUtilsMessengerEXT");
+  vk::Instance I = Instance;
+  auto func = reinterpret_cast<PFN_vkCreateDebugUtilsMessengerEXT>(
+      I.getProcAddr("vkCreateDebugUtilsMessengerEXT"));
   if (func != nullptr)
     return func(Instance, pCreateInfo, pAllocator, pDebugMessenger);
   else
     return VK_ERROR_EXTENSION_NOT_PRESENT;
 }
 // Some simillar hack.
-void destroyDebugUtilsMessengerEXT(VkInstance instance,
-                                   VkDebugUtilsMessengerEXT debugMessenger,
-                                   const VkAllocationCallbacks *pAllocator) {
-  auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(
-      instance, "vkDestroyDebugUtilsMessengerEXT");
+void vkDestroyDebugUtilsMessengerEXT(VkInstance Instance,
+                                     VkDebugUtilsMessengerEXT debugMessenger,
+                                     const VkAllocationCallbacks *pAllocator) {
+  vk::Instance I = Instance;
+  auto func = reinterpret_cast<PFN_vkDestroyDebugUtilsMessengerEXT>(
+      I.getProcAddr("vkDestroyDebugUtilsMessengerEXT"));
   if (func)
-    func(instance, debugMessenger, pAllocator);
+    func(Instance, debugMessenger, pAllocator);
   else
     std::cout << "ERR: debug is not destroyed!\n";
 }
@@ -99,7 +102,7 @@ class HelloTriangleApplication {
   // And adds a detailes about app to the driver
   vk::Instance m_instance;
   // Member for a call back handling.
-  VkDebugUtilsMessengerEXT m_debugMessenger{};
+  vk::DebugUtilsMessengerEXT m_debugMessenger;
   // Preferable device. Will be freed automatically.
   vk::PhysicalDevice m_physicalDevice;
   // Logical device.
@@ -1364,13 +1367,8 @@ private:
     if (!m_enableValidationLayers)
       return;
 
-    // TODO think about C++ style.
-    VkDebugUtilsMessengerCreateInfoEXT CreateInfo =
-        static_cast<VkDebugUtilsMessengerCreateInfoEXT>(
-            populateDebugMessengerInfo());
-    if (createDebugUtilsMessengerEXT(m_instance, &CreateInfo, nullptr,
-                                     &m_debugMessenger) != VK_SUCCESS)
-      throw std::runtime_error("failed to set up debug messenger!");
+    m_debugMessenger =
+        m_instance.createDebugUtilsMessengerEXT(populateDebugMessengerInfo());
   }
 
   std::vector<char const *> getRequiredExtensions() {
@@ -1409,7 +1407,7 @@ private:
         m_enableValidationLayers ? populateDebugMessengerInfo()
                                  : vk::DebugUtilsMessengerCreateInfoEXT{};
     if (m_enableValidationLayers)
-      CreateInfo.pNext = (VkDebugUtilsMessengerCreateInfoEXT *)&DebugCreateInfo;
+      CreateInfo.setPNext(&DebugCreateInfo);
 
     m_instance = vk::createInstance(CreateInfo);
   }
@@ -1557,7 +1555,7 @@ private:
     m_device.destroy();
 
     if (m_enableValidationLayers)
-      destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
+      m_instance.destroyDebugUtilsMessengerEXT(m_debugMessenger);
 
     m_instance.destroySurfaceKHR(m_surface);
     // TODO: Do I need this destroy?
