@@ -1568,29 +1568,35 @@ private:
   void cleanup() {
     cleanupSwapchain();
 
-    vkDestroySampler(m_device, textureSampler, nullptr);
-    vkDestroyImageView(m_device, textureImageView, nullptr);
+    m_device.destroySampler(textureSampler);
+    m_device.destroyImageView(textureImageView);
 
-    vkDestroyImage(m_device, textureImage, nullptr);
-    vkFreeMemory(m_device, textureImageMemory, nullptr);
+    m_device.destroyImage(textureImage);
+    m_device.freeMemory(textureImageMemory);
 
-    vkDestroyDescriptorPool(m_device, descriptorPool, nullptr);
-    vkDestroyDescriptorSetLayout(m_device, descriptorSetLayout, nullptr);
-    vkDestroyBuffer(m_device, VertexBuffer, nullptr);
-    vkFreeMemory(m_device, VertexBufferMemory, nullptr);
-    vkDestroyBuffer(m_device, IndexBuffer, nullptr);
-    vkFreeMemory(m_device, IndexBufferMemory, nullptr);
+    m_device.destroyDescriptorPool(descriptorPool);
+    m_device.destroyDescriptorSetLayout(descriptorSetLayout);
+    m_device.destroyBuffer(VertexBuffer);
+    m_device.freeMemory(VertexBufferMemory);
+    m_device.destroyBuffer(IndexBuffer);
+    m_device.freeMemory(IndexBufferMemory);
 
-    for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      vkDestroySemaphore(m_device, m_renderFinishedSemaphore[i], nullptr);
-      vkDestroySemaphore(m_device, m_imageAvailableSemaphore[i], nullptr);
-      vkDestroyFence(m_device, m_inFlightFence[i], nullptr);
-    }
-    vkDestroyCommandPool(m_device, m_commandPool, nullptr);
-    vkDestroyDevice(m_device, nullptr);
+    for (auto &&Sem : m_renderFinishedSemaphore)
+      m_device.destroySemaphore(Sem);
+    for (auto &&Sem : m_imageAvailableSemaphore)
+      m_device.destroySemaphore(Sem);
+    for (auto &&Fence : m_inFlightFence)
+      m_device.destroyFence(Fence);
+
+    m_device.destroyCommandPool(m_commandPool);
+
+    // TODO: Do I need this destroy?
+    m_device.destroy();
+
     if (m_enableValidationLayers)
       destroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
-    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+
+    m_instance.destroySurfaceKHR(m_surface);
     // TODO: Do I need this destroy?
     m_instance.destroy();
 
