@@ -1500,7 +1500,7 @@ private:
 
   void mainLoop() {
 
-    uint32_t MaxFrames{5};
+    uint32_t const MaxFrames{5};
     uint32_t Frame{0};
 
     while (!glfwWindowShouldClose(m_Window) && Frame++ < MaxFrames) {
@@ -1508,7 +1508,7 @@ private:
       drawFrame();
     }
 
-    vkDeviceWaitIdle(m_device);
+    m_device.waitIdle();
   }
 
   uint32_t currentFrame = 0;
