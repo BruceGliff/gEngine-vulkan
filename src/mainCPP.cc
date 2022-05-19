@@ -113,8 +113,8 @@ class HelloTriangleApplication {
   // It is actually platform-dependent, but glfw uses function which fills
   // platform-specific structures by itself.
   VkSurfaceKHR m_surface{};
-  // swapchain;
-  VkSwapchainKHR m_swapchain{};
+
+  vk::SwapchainKHR m_swapchain{};
 
   std::vector<vk::Image> m_swapchainImages;
   vk::Format m_swapchainImageFormat;
@@ -1514,35 +1514,20 @@ private:
     m_commandBuffers[currentFrame].reset();
     recordCommandBuffer(m_commandBuffers[currentFrame], ImgIdx);
 
-    VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphore[currentFrame]};
-    VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore[currentFrame]};
-    VkPipelineStageFlags waitStages[] = {
-        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
-    VkSubmitInfo submitInfo{
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .waitSemaphoreCount = 1,
-        .pWaitSemaphores = waitSemaphores,
-        .pWaitDstStageMask = waitStages,
-        .commandBufferCount = 1,
-        // TODO. temporary
-        .pCommandBuffers = (VkCommandBuffer *)&m_commandBuffers[currentFrame],
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = signalSemaphores};
+    vk::PipelineStageFlags WaitStage =
+        vk::PipelineStageFlagBits::eColorAttachmentOutput;
 
-    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo,
-                      m_inFlightFence[currentFrame]) != VK_SUCCESS) {
-      throw std::runtime_error("failed to submit draw command buffer!");
-    }
+    m_graphicsQueue.submit(
+        vk::SubmitInfo{m_imageAvailableSemaphore[currentFrame], WaitStage,
+                       m_commandBuffers[currentFrame],
+                       m_renderFinishedSemaphore[currentFrame]},
+        m_inFlightFence[currentFrame]);
 
-    VkSwapchainKHR swapChains[] = {m_swapchain};
-    VkPresentInfoKHR presentInfo{.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-                                 .waitSemaphoreCount = 1,
-                                 .pWaitSemaphores = signalSemaphores,
-                                 .swapchainCount = 1,
-                                 .pSwapchains = swapChains,
-                                 .pImageIndices = &ImgIdx,
-                                 .pResults = nullptr};
-    vkQueuePresentKHR(m_presentQueue, &presentInfo);
+    if (m_presentQueue.presentKHR(
+            {m_renderFinishedSemaphore[currentFrame], m_swapchain, ImgIdx}) !=
+        vk::Result::eSuccess)
+      throw std::runtime_error("Fail to wait fance");
+
     if (Res == vk::Result::eErrorOutOfDateKHR ||
         Res == vk::Result::eSuboptimalKHR || framebufferResized) {
       recreateSwapchain();
