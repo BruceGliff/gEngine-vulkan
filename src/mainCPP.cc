@@ -1539,30 +1539,30 @@ private:
   }
 
   void cleanupSwapchain() {
-    vkDestroyImageView(m_device, colorImageView, nullptr);
-    vkDestroyImage(m_device, colorImage, nullptr);
-    vkFreeMemory(m_device, colorImageMemory, nullptr);
+    m_device.destroyImageView(colorImageView);
+    m_device.destroyImage(colorImage);
+    m_device.freeMemory(colorImageMemory);
 
-    vkDestroyImageView(m_device, depthImageView, nullptr);
-    vkDestroyImage(m_device, depthImage, nullptr);
-    vkFreeMemory(m_device, depthImageMemory, nullptr);
+    m_device.destroyImageView(depthImageView);
+    m_device.destroyImage(depthImage);
+    m_device.freeMemory(depthImageMemory);
 
-    for (size_t i = 0; i < m_swapChainFramebuffers.size(); i++)
-      vkDestroyFramebuffer(m_device, m_swapChainFramebuffers[i], nullptr);
+    for (auto &&SwapchainBuff : m_swapChainFramebuffers)
+      m_device.destroyFramebuffer(SwapchainBuff);
 
-    vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
-    vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
-    vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+    m_device.destroyPipeline(m_graphicsPipeline);
+    m_device.destroyPipelineLayout(m_pipelineLayout);
+    m_device.destroyRenderPass(m_renderPass);
 
-    for (size_t i = 0; i < m_swapchainImageViews.size(); i++)
-      vkDestroyImageView(m_device, m_swapchainImageViews[i], nullptr);
+    for (auto &&ImgView : m_swapchainImageViews)
+      m_device.destroyImageView(ImgView);
 
-    vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
+    m_device.destroySwapchainKHR(m_swapchain);
 
-    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      vkDestroyBuffer(m_device, uniformBuffers[i], nullptr);
-      vkFreeMemory(m_device, uniformBuffersMemory[i], nullptr);
-    }
+    for (auto &&UniBuff : uniformBuffers)
+      m_device.destroyBuffer(UniBuff);
+    for (auto &&UniBuffMem : uniformBuffersMemory)
+      m_device.freeMemory(UniBuffMem);
   }
 
   void cleanup() {
