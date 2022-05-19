@@ -780,30 +780,29 @@ private:
     createCommandBuffers();
   }
 
-  void updateUniformBuffer(uint32_t currentImage) {
-    static auto const startTime = std::chrono::high_resolution_clock::now();
+  void updateUniformBuffer(uint32_t CurrImg) {
+    static auto const StartTime = std::chrono::high_resolution_clock::now();
 
-    auto const currentTime = std::chrono::high_resolution_clock::now();
-    float const time =
-        std::chrono::duration<float, std::chrono::seconds::period>(currentTime -
-                                                                   startTime)
+    auto const CurrTime = std::chrono::high_resolution_clock::now();
+    float const Time =
+        std::chrono::duration<float, std::chrono::seconds::period>(CurrTime -
+                                                                   StartTime)
             .count();
     UniformBufferObject ubo{
-        .model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f),
+        .model = glm::rotate(glm::mat4(1.f), Time * glm::radians(90.f),
                              glm::vec3(0.f, 0.f, 1.f)),
         .view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f),
                             glm::vec3(0.f, 0.f, 1.f)),
         .proj = glm::perspective(glm::radians(45.f),
                                  m_swapchainExtent.width /
-                                     (float)m_swapchainExtent.height,
+                                     static_cast<float>(m_swapchainExtent.height),
                                  0.1f, 10.f)};
     ubo.proj[1][1] *= -1; // because GLM designed for OpenGL.
 
-    void *data;
-    vkMapMemory(m_device, uniformBuffersMemory[currentImage], 0, sizeof(ubo), 0,
-                &data);
-    memcpy(data, &ubo, sizeof(ubo));
-    vkUnmapMemory(m_device, uniformBuffersMemory[currentImage]);
+    auto const &Memory = uniformBuffersMemory[CurrImg];
+    void * Data = m_device.mapMemory(Memory, 0, sizeof(ubo));
+    memcpy(Data, &ubo, sizeof(ubo));
+    m_device.unmapMemory(Memory);
   }
 
   std::pair<vk::Buffer, vk::DeviceMemory>
