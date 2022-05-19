@@ -136,18 +136,18 @@ class HelloTriangleApplication {
 
   std::vector<vk::CommandBuffer> m_commandBuffers;
 
-  std::vector<VkSemaphore> m_imageAvailableSemaphore;
-  std::vector<VkSemaphore> m_renderFinishedSemaphore;
+  std::vector<vk::Semaphore> m_imageAvailableSemaphore;
+  std::vector<vk::Semaphore> m_renderFinishedSemaphore;
 
-  std::vector<VkFence> m_inFlightFence;
+  std::vector<vk::Fence> m_inFlightFence;
 
   bool framebufferResized = false;
 
   std::vector<Vertex> Vertices;
   std::vector<uint32_t> Indices;
 
-  VkBuffer VertexBuffer;
-  VkDeviceMemory VertexBufferMemory;
+  vk::Buffer VertexBuffer;
+  vk::DeviceMemory VertexBufferMemory;
 
   VkBuffer IndexBuffer;
   VkDeviceMemory IndexBufferMemory;
@@ -824,9 +824,9 @@ private:
   }
 
   void createSyncObjects() {
-    std::vector<VkSemaphore> sem1;
-    std::vector<VkSemaphore> sem2;
-    std::vector<VkFence> fence;
+    std::vector<vk::Semaphore> sem1;
+    std::vector<vk::Semaphore> sem2;
+    std::vector<vk::Fence> fence;
 
     for (int i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
       sem1.push_back(m_device.createSemaphore({}));
@@ -845,56 +845,38 @@ private:
         {m_commandPool, vk::CommandBufferLevel::ePrimary, Frames});
   }
 
-  void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
-    VkCommandBufferBeginInfo beginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = 0,
-        .pInheritanceInfo = nullptr};
-
-    if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
-      throw std::runtime_error("failed to begin recording command buffer!");
-    }
+  void recordCommandBuffer(vk::CommandBuffer CmdBuff, uint32_t ImgIdx) {
+    // TODO. what differencies btwn ImgIdx and currentFrame?
+    vk::CommandBufferBeginInfo CmdBeginInfo{};
+    if (CmdBuff.begin(&CmdBeginInfo) != vk::Result::eSuccess)
+      throw std::runtime_error("Fail to begin cmd buff");
 
     // Order of clear values should be indentical to the order of attachments.
-    std::array<VkClearValue, 2> clearValues{};
-    clearValues[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clearValues[1].depthStencil = {1.0f, 0};
-    VkRenderPassBeginInfo renderPassInfo{
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .renderPass = m_renderPass,
-        .framebuffer = m_swapChainFramebuffers[imageIndex],
-        .clearValueCount = static_cast<uint32_t>(clearValues.size()),
-        .pClearValues = clearValues.data()};
-    // This part is to avoid "nested designators extension".
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent =
-        static_cast<VkExtent2D>(m_swapchainExtent);
+    std::array<vk::ClearValue, 2> ClearValues{};
+    std::array ColorVal = {0.0f, 0.0f, 0.0f, 1.0f};
+    ClearValues[0].setColor(ColorVal);
+    ClearValues[1].setDepthStencil({1.0f, 0});
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo,
-                         VK_SUBPASS_CONTENTS_INLINE);
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                      m_graphicsPipeline);
+    CmdBuff.beginRenderPass({m_renderPass,
+                             m_swapChainFramebuffers[ImgIdx],
+                             {{}, m_swapchainExtent},
+                             ClearValues},
+                            vk::SubpassContents::eInline);
+    CmdBuff.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-    VkBuffer vertexBuffers[] = {VertexBuffer};
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, IndexBuffer, 0, VK_INDEX_TYPE_UINT32);
+    vk::DeviceSize Offsets{0};
+    CmdBuff.bindVertexBuffers(0, VertexBuffer, Offsets);
+    CmdBuff.bindIndexBuffer(IndexBuffer, 0, vk::IndexType::eUint32);
 
-    // TODO. temprorary.
-    vk::CommandBuffer CmdBuff = commandBuffer;
     CmdBuff.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                m_pipelineLayout, 0,
                                descriptorSets[currentFrame], nullptr);
 
     // vertexCount, instanceCount, fitstVertex, firstInstance
-    vkCmdDrawIndexed(commandBuffer, Indices.size(), 1, 0, 0, 0);
-    // vkCmdDraw(commandBuffer, static_cast<uint32_t>(Vertices.size()), 1, 0,
-    // 0);
+    CmdBuff.drawIndexed(Indices.size(), 1, 0, 0, 0);
 
-    vkCmdEndRenderPass(commandBuffer);
-    if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
-      throw std::runtime_error("failed to record command buffer!");
-    }
+    CmdBuff.endRenderPass();
+    CmdBuff.end();
   }
 
   void createCommandPool() {
@@ -1338,7 +1320,7 @@ private:
   bool isDeviceSuitable(vk::PhysicalDevice const &Device) {
     // name, type, supported Vulkan version can be quired via
     // GetPhysicalDeviceProperties.
-    vk::PhysicalDeviceProperties DeviceProps = Device.getProperties();
+    // vk::PhysicalDeviceProperties DeviceProps = Device.getProperties();
 
     // optional features like texture compressing, 64bit floating operations,
     // multiview-port and so one...
@@ -1513,28 +1495,24 @@ private:
 
   uint32_t currentFrame = 0;
   void drawFrame() {
-    vkWaitForFences(m_device, 1, &m_inFlightFence[currentFrame], VK_TRUE,
-                    UINT64_MAX);
 
-    uint32_t imageIndex{0};
+    if (m_device.waitForFences(m_inFlightFence[currentFrame], VK_TRUE,
+                               UINT64_MAX) != vk::Result::eSuccess)
+      throw std::runtime_error("Fail to wait fance");
 
-    VkResult res = vkAcquireNextImageKHR(
-        m_device, m_swapchain, UINT64_MAX,
-        m_imageAvailableSemaphore[currentFrame], VK_NULL_HANDLE, &imageIndex);
-    if (res == VK_ERROR_OUT_OF_DATE_KHR) {
+    auto [Res, ImgIdx] = m_device.acquireNextImageKHR(
+        m_swapchain, UINT64_MAX, m_imageAvailableSemaphore[currentFrame], {});
+    if (Res == vk::Result::eErrorOutOfDateKHR)
       recreateSwapchain();
-    } else if (res != VK_SUCCESS && res != VK_SUBOPTIMAL_KHR) {
+    else if (Res != vk::Result::eSuccess && Res != vk::Result::eSuboptimalKHR)
       throw std::runtime_error("failed to acquire swap chain image!");
-    }
 
     updateUniformBuffer(currentFrame);
 
     // Only reset the fence if we are submitting work
-    vkResetFences(m_device, 1, &m_inFlightFence[currentFrame]);
-
-    vkResetCommandBuffer(m_commandBuffers[currentFrame],
-                         /*VkCommandBufferResetFlagBits*/ 0);
-    recordCommandBuffer(m_commandBuffers[currentFrame], imageIndex);
+    m_device.resetFences(m_inFlightFence[currentFrame]);
+    m_commandBuffers[currentFrame].reset();
+    recordCommandBuffer(m_commandBuffers[currentFrame], ImgIdx);
 
     VkSemaphore waitSemaphores[] = {m_imageAvailableSemaphore[currentFrame]};
     VkSemaphore signalSemaphores[] = {m_renderFinishedSemaphore[currentFrame]};
@@ -1562,14 +1540,14 @@ private:
                                  .pWaitSemaphores = signalSemaphores,
                                  .swapchainCount = 1,
                                  .pSwapchains = swapChains,
-                                 .pImageIndices = &imageIndex,
+                                 .pImageIndices = &ImgIdx,
                                  .pResults = nullptr};
     vkQueuePresentKHR(m_presentQueue, &presentInfo);
-    if (res == VK_ERROR_OUT_OF_DATE_KHR || res == VK_SUBOPTIMAL_KHR ||
-        framebufferResized) {
+    if (Res == vk::Result::eErrorOutOfDateKHR ||
+        Res == vk::Result::eSuboptimalKHR || framebufferResized) {
       recreateSwapchain();
       framebufferResized = false;
-    } else if (res != VK_SUCCESS)
+    } else if (Res != vk::Result::eSuccess)
       throw std::runtime_error("failed to present swap chain image!");
 
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
