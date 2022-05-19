@@ -112,7 +112,7 @@ class HelloTriangleApplication {
   // Surface to be rendered in.
   // It is actually platform-dependent, but glfw uses function which fills
   // platform-specific structures by itself.
-  VkSurfaceKHR m_surface{};
+  vk::SurfaceKHR m_surface{};
 
   vk::SwapchainKHR m_swapchain{};
 
@@ -123,16 +123,16 @@ class HelloTriangleApplication {
   // For each VkImage we create VkImageView.
   std::vector<vk::ImageView> m_swapchainImageViews;
 
-  VkRenderPass m_renderPass;
+  vk::RenderPass m_renderPass;
   // Used for an uniform variable.
-  VkPipelineLayout m_pipelineLayout;
+  vk::PipelineLayout m_pipelineLayout;
 
   vk::Pipeline m_graphicsPipeline;
 
   // A framebuffer object references all of the VkImageView objects.
   std::vector<vk::Framebuffer> m_swapChainFramebuffers;
 
-  VkCommandPool m_commandPool;
+  vk::CommandPool m_commandPool;
 
   std::vector<vk::CommandBuffer> m_commandBuffers;
 
@@ -149,33 +149,33 @@ class HelloTriangleApplication {
   vk::Buffer VertexBuffer;
   vk::DeviceMemory VertexBufferMemory;
 
-  VkBuffer IndexBuffer;
-  VkDeviceMemory IndexBufferMemory;
+  vk::Buffer IndexBuffer;
+  vk::DeviceMemory IndexBufferMemory;
 
-  std::vector<VkBuffer> uniformBuffers;
-  std::vector<VkDeviceMemory> uniformBuffersMemory;
+  std::vector<vk::Buffer> uniformBuffers;
+  std::vector<vk::DeviceMemory> uniformBuffersMemory;
 
   vk::DescriptorSetLayout descriptorSetLayout;
 
-  VkDescriptorPool descriptorPool;
+  vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
   uint32_t mipLevels;
-  VkImage textureImage;
-  VkDeviceMemory textureImageMemory;
+  vk::Image textureImage;
+  vk::DeviceMemory textureImageMemory;
 
-  VkImageView textureImageView;
-  VkSampler textureSampler;
+  vk::ImageView textureImageView;
+  vk::Sampler textureSampler;
 
-  VkImage depthImage;
-  VkDeviceMemory depthImageMemory;
-  VkImageView depthImageView;
+  vk::Image depthImage;
+  vk::DeviceMemory depthImageMemory;
+  vk::ImageView depthImageView;
 
   // For msaa.
   vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1;
-  VkImage colorImage;
-  VkDeviceMemory colorImageMemory;
-  VkImageView colorImageView;
+  vk::Image colorImage;
+  vk::DeviceMemory colorImageMemory;
+  vk::ImageView colorImageView;
 
 public:
   HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
@@ -594,36 +594,23 @@ private:
     return {Image, ImageMem};
   }
 
-  VkCommandBuffer beginSingleTimeCommands() {
-    VkCommandBufferAllocateInfo allocInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = m_commandPool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1};
-
-    VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(m_device, &allocInfo, &commandBuffer);
-
-    VkCommandBufferBeginInfo beginInfo{
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
-
-    vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-    return commandBuffer;
+  vk::CommandBuffer beginSingleTimeCommands() {
+    // allocateCommandBuffers returns a vector.
+    auto CmdBuff = m_device
+                       .allocateCommandBuffers(
+                           {m_commandPool, vk::CommandBufferLevel::ePrimary, 1})
+                       .front();
+    CmdBuff.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    return CmdBuff;
   }
 
-  void endSingleTimeCommands(VkCommandBuffer commandBuffer) {
-    vkEndCommandBuffer(commandBuffer);
+  void endSingleTimeCommands(vk::CommandBuffer CmdBuff) {
+    CmdBuff.end();
 
-    VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-                            .commandBufferCount = 1,
-                            .pCommandBuffers = &commandBuffer};
+    m_graphicsQueue.submit(vk::SubmitInfo{}.setCommandBuffers(CmdBuff));
+    m_graphicsQueue.waitIdle();
 
-    vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_graphicsQueue);
-
-    vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
+    m_device.freeCommandBuffers(m_commandPool, CmdBuff);
   }
 
   void createDescriptorSets() {
@@ -1147,7 +1134,8 @@ private:
   }
 
   void createSurface() {
-    if (glfwCreateWindowSurface(m_instance, m_Window, nullptr, &m_surface) !=
+    if (glfwCreateWindowSurface(m_instance, m_Window, nullptr,
+                                reinterpret_cast<VkSurfaceKHR *>(&m_surface)) !=
         VK_SUCCESS)
       throw std::runtime_error("failed to create window surface!");
   }
