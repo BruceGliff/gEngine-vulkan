@@ -765,7 +765,7 @@ private:
       glfwWaitEvents();
     }
 
-    vkDeviceWaitIdle(m_device);
+    m_device.waitIdle();
 
     createSwapchain();
     createImageViews();
@@ -793,14 +793,15 @@ private:
                              glm::vec3(0.f, 0.f, 1.f)),
         .view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f),
                             glm::vec3(0.f, 0.f, 1.f)),
-        .proj = glm::perspective(glm::radians(45.f),
-                                 m_swapchainExtent.width /
-                                     static_cast<float>(m_swapchainExtent.height),
-                                 0.1f, 10.f)};
+        .proj =
+            glm::perspective(glm::radians(45.f),
+                             m_swapchainExtent.width /
+                                 static_cast<float>(m_swapchainExtent.height),
+                             0.1f, 10.f)};
     ubo.proj[1][1] *= -1; // because GLM designed for OpenGL.
 
     auto const &Memory = uniformBuffersMemory[CurrImg];
-    void * Data = m_device.mapMemory(Memory, 0, sizeof(ubo));
+    void *Data = m_device.mapMemory(Memory, 0, sizeof(ubo));
     memcpy(Data, &ubo, sizeof(ubo));
     m_device.unmapMemory(Memory);
   }
