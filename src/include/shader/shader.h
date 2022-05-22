@@ -5,7 +5,7 @@
 
 class Shader {
   // TODO may be std::byte?
-  std::vector<char> RawData{};
+  std::vector<uint32_t> RawData{};
 
 public:
   Shader(std::string_view PathToShader);
@@ -16,9 +16,8 @@ public:
   Shader &operator=(Shader const &) = delete;
   Shader &operator=(Shader &&) = delete;
 
-  static std::vector<char> readFile(std::string_view PathToShader);
+  static std::vector<uint32_t> readFile(std::string_view PathToShader);
   // Just for VK.
-  uint32_t const *getRawData();
-  uint32_t const *getRawData() const;
+  std::vector<uint32_t> const &getSPIRV() const;
   uint32_t getSize() const;
 };

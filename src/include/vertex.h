@@ -7,8 +7,10 @@
 #include <functional>
 
 // Forward declaration.
-struct VkVertexInputBindingDescription;
-struct VkVertexInputAttributeDescription;
+namespace vk {
+struct VertexInputBindingDescription;
+struct VertexInputAttributeDescription;
+} // namespace vk
 
 struct Vertex {
   glm::vec3 Position;
@@ -16,8 +18,8 @@ struct Vertex {
   glm::vec2 TexCoord;
 
   template <int No>
-  using AttrDescr = std::array<VkVertexInputAttributeDescription, No>;
-  static VkVertexInputBindingDescription getBindDescription();
+  using AttrDescr = std::array<vk::VertexInputAttributeDescription, No>;
+  static vk::VertexInputBindingDescription getBindDescription();
   static AttrDescr<3> getAttrDescription();
 
   // For using as key in unordered_map.
