@@ -17,6 +17,8 @@
 #include "shader/shader.h"
 #include "vertex.h"
 
+#include "gEng/window.h"
+
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -71,12 +73,11 @@ struct UniformBufferObject {
   glm::mat4 proj;
 };
 
-class HelloTriangleApplication {
+// TODO. move Window in UserWindow.
+class HelloTriangleApplication : gEng::UserWindow {
   EnvHandler &EH;
-  GLFWwindow *m_Window{};
 
-  unsigned const m_Width{1600};
-  unsigned const m_Height{900};
+  gEng::Window m_Window;
 
   // Hom many frames can be processed concurrently.
   const int MAX_FRAMES_IN_FLIGHT = 2;
@@ -143,8 +144,6 @@ class HelloTriangleApplication {
 
   std::vector<vk::Fence> m_inFlightFence;
 
-  bool framebufferResized = false;
-
   std::vector<Vertex> Vertices;
   std::vector<uint32_t> Indices;
 
@@ -180,42 +179,20 @@ class HelloTriangleApplication {
   vk::ImageView colorImageView;
 
 public:
-  HelloTriangleApplication(EnvHandler &InEH) : EH{InEH} {}
+  HelloTriangleApplication(EnvHandler &InEH)
+      : EH{InEH}, m_Window{1600u, 900u, "gEngine", this} {}
   void run() {
-    initWindow();
     initVulkan();
     mainLoop();
     cleanup();
   }
 
 private:
-  void initWindow() {
-    glfwInit();
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    // TODO Resize does not work properly.
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-    glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, true);
-    m_Window = glfwCreateWindow(m_Width, m_Height, EH.getFilenameStr().c_str(),
-                                nullptr, nullptr);
-    assert(m_Window && "Window initializating falis!");
-
-    glfwSetWindowUserPointer(m_Window, this);
-    glfwSetFramebufferSizeCallback(m_Window, framebufferResizeCallback);
-  }
-
-  static void framebufferResizeCallback(GLFWwindow *window, int width,
-                                        int height) {
-    auto app = reinterpret_cast<HelloTriangleApplication *>(
-        glfwGetWindowUserPointer(window));
-    app->framebufferResized = true;
-  }
 
   void initVulkan() {
     createInstance();
     setupDebugMessenger();
-    // It has to be placed here, because we need already created Instance
-    // and picking PhysicalDevice can rely on Surface attributes.
-    createSurface();
+    m_surface = m_Window.createSurface(m_instance);
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapchain();
@@ -747,12 +724,7 @@ private:
   // Creates new swap chain when smth goes wrong or resizing.
   void recreateSwapchain() {
     // Wait till proper size.
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(m_Window, &width, &height);
-    while (width == 0 || height == 0) {
-      glfwGetFramebufferSize(m_Window, &width, &height);
-      glfwWaitEvents();
-    }
+    m_Window.updExtent();
 
     m_device.waitIdle();
 
@@ -1135,13 +1107,6 @@ private:
     m_swapchainImages = m_device.getSwapchainImagesKHR(m_swapchain);
   }
 
-  void createSurface() {
-    if (glfwCreateWindowSurface(m_instance, m_Window, nullptr,
-                                reinterpret_cast<VkSurfaceKHR *>(&m_surface)) !=
-        VK_SUCCESS)
-      throw std::runtime_error("failed to create window surface!");
-  }
-
   void createLogicalDevice() {
     // TODO rethink about using findQueueFamilieses once.
     QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
@@ -1293,15 +1258,14 @@ private:
     if (Capabilities.currentExtent.width != UINT32_MAX)
       return Capabilities.currentExtent;
     else {
-      int Width{0}, Height{0};
-      glfwGetFramebufferSize(m_Window, &Width, &Height);
-
-      uint32_t const RealW = std::clamp(static_cast<uint32_t>(Width),
-                                        Capabilities.minImageExtent.width,
-                                        Capabilities.maxImageExtent.width);
-      uint32_t const RealH = std::clamp(static_cast<uint32_t>(Height),
-                                        Capabilities.minImageExtent.height,
-                                        Capabilities.maxImageExtent.height);
+      // TODO. maybe updExtent
+      auto [Width, Height] = m_Window.getExtent();
+      uint32_t const RealW =
+          std::clamp(Width, Capabilities.minImageExtent.width,
+                     Capabilities.maxImageExtent.width);
+      uint32_t const RealH =
+          std::clamp(Height, Capabilities.minImageExtent.height,
+                     Capabilities.maxImageExtent.height);
       return {RealW, RealH};
     }
   }
@@ -1445,7 +1409,7 @@ private:
     uint32_t const MaxFrames{5};
     uint32_t Frame{0};
 
-    while (!glfwWindowShouldClose(m_Window) && Frame++ < MaxFrames) {
+    while (!m_Window.isShouldClose() && Frame++ < MaxFrames) {
       glfwPollEvents();
       drawFrame();
     }
@@ -1489,9 +1453,9 @@ private:
       throw std::runtime_error("Fail to wait fance");
 
     if (Res == vk::Result::eErrorOutOfDateKHR ||
-        Res == vk::Result::eSuboptimalKHR || framebufferResized) {
+        Res == vk::Result::eSuboptimalKHR || IsResized) {
       recreateSwapchain();
-      framebufferResized = false;
+      IsResized = false;
     } else if (Res != vk::Result::eSuccess)
       throw std::runtime_error("failed to present swap chain image!");
 
@@ -1559,10 +1523,6 @@ private:
     m_instance.destroySurfaceKHR(m_surface);
     // TODO: Do I need this destroy?
     m_instance.destroy();
-
-    glfwDestroyWindow(m_Window);
-
-    glfwTerminate();
   }
 };
 

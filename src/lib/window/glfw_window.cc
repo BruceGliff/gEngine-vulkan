@@ -12,9 +12,10 @@ static void framebufferResizeCallback(GLFWwindow *Window, int Width,
 
 namespace gEng {
 
+UserWindow::~UserWindow() {}
+
 Window::Window(uint32_t WidthIn, uint32_t HeightIn, std::string_view TitleIn,
-               UserWindow *UserIn, vk::Instance const &Instance,
-               vk::SurfaceKHR *Surface)
+               UserWindow *UserIn)
     : Width{WidthIn}, Height{HeightIn}, Title{TitleIn}, User{UserIn} {
   glfwInit();
   glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -28,12 +29,15 @@ Window::Window(uint32_t WidthIn, uint32_t HeightIn, std::string_view TitleIn,
 
   glfwSetWindowUserPointer(WrapWindow, User);
   glfwSetFramebufferSizeCallback(WrapWindow, framebufferResizeCallback);
+}
 
+vk::SurfaceKHR Window::createSurface(vk::Instance const &Instance) const {
   // TODO in wrap.
-  if (glfwCreateWindowSurface(Instance, WrapWindow, nullptr,
-                              reinterpret_cast<VkSurfaceKHR *>(Surface)) !=
+  VkSurfaceKHR Surface;
+  if (glfwCreateWindowSurface(Instance, WrapWindow, nullptr, &Surface) !=
       VK_SUCCESS)
     throw std::runtime_error("failed to create window surface!");
+  return Surface;
 }
 
 Window::~Window() {
@@ -42,22 +46,7 @@ Window::~Window() {
   glfwTerminate();
 }
 
-Window::Window(Window &&Other)
-    : Width{Other.Width}, Height{Other.Height}, Title{std::move(Other.Title)},
-      WrapWindow{Other.WrapWindow} {
-  Other.WrapWindow = nullptr;
-}
-
-Window &Window::operator=(Window &&Other) {
-  std::swap(Width, Other.Width);
-  std::swap(Height, Other.Height);
-  std::swap(Title, Other.Title);
-  std::swap(WrapWindow, Other.WrapWindow);
-
-  return *this;
-}
-
-std::pair<uint32_t, uint32_t> Window::getExtent() {
+std::pair<uint32_t, uint32_t> Window::updExtent() {
   if (User->IsResized)
     std::tie(Width, Height) = getNativeExtent();
 
@@ -80,7 +69,7 @@ std::pair<uint32_t, uint32_t> Window::getNativeExtent() const {
     glfwWaitEvents();
   }
 
-  return {Wth, Hth};
+  return {static_cast<uint32_t>(Wth), static_cast<uint32_t>(Hth)};
 }
 
 bool Window::isShouldClose() const { return glfwWindowShouldClose(WrapWindow); }

@@ -31,22 +31,23 @@ class Window final {
   GLFWwindow *WrapWindow{nullptr};
   UserWindow *User{nullptr};
 
+  std::pair<uint32_t, uint32_t> getNativeExtent() const;
+
 public:
   Window() = delete;
   Window(Window const &) = delete;
   Window &operator=(Window const &) = delete;
+  Window(Window &&) = delete;
+  Window &operator=(Window &&) = delete;
   ~Window();
 
-  Window(Window &&);
-  Window &operator=(Window &&);
-
   Window(uint32_t WidthIn, uint32_t HeightIn, std::string_view TitleIn,
-         UserWindow *User, vk::Instance const &Instance,
-         vk::SurfaceKHR *Surface);
+         UserWindow *User);
 
-  std::pair<uint32_t, uint32_t> getExtent();
+  std::pair<uint32_t, uint32_t> updExtent();
   std::pair<uint32_t, uint32_t> getExtent() const;
-  std::pair<uint32_t, uint32_t> getNativeExtent() const;
   bool isShouldClose() const;
+
+  vk::SurfaceKHR createSurface(vk::Instance const &Instance) const;
 };
 } // namespace gEng
