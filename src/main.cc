@@ -13,7 +13,6 @@
 #include <tiny_obj_loader.h>
 
 #include "EnvHandler.h"
-#include "decoy/decoy.h"
 #include "image/image.h"
 #include "shader/shader.h"
 #include "vertex.h"
@@ -1571,7 +1570,6 @@ int main(int argc, char *argv[]) {
 #ifndef NDEBUG
   std::cout << "Debug\n";
 #endif // Debug
-  Decoy::Dump();
 
   EnvHandler EH{argv[0]};
 

@@ -4,7 +4,7 @@ set(PROJECT_NAME gEngine)
 project(${PROJECT_NAME})
 
 file(GLOB_RECURSE SRC_FILES lib/*.cc)
-add_executable(${PROJECT_NAME} mainCPP.cc ${SRC_FILES})
+add_executable(${PROJECT_NAME} main.cc ${SRC_FILES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
