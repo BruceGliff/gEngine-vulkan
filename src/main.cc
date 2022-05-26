@@ -12,11 +12,11 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-#include "EnvHandler.h"
 #include "image/image.h"
 #include "shader/shader.h"
 #include "vertex.h"
 
+#include "gEng/environment.h"
 #include "gEng/window.h"
 
 #include <algorithm>
@@ -75,7 +75,7 @@ struct UniformBufferObject {
 
 // TODO. move Window in UserWindow.
 class HelloTriangleApplication : gEng::UserWindow {
-  EnvHandler &EH;
+  gEng::SysEnv &EH;
 
   gEng::Window m_Window;
 
@@ -179,7 +179,7 @@ class HelloTriangleApplication : gEng::UserWindow {
   vk::ImageView colorImageView;
 
 public:
-  HelloTriangleApplication(EnvHandler &InEH)
+  HelloTriangleApplication(gEng::SysEnv &InEH)
       : EH{InEH}, m_Window{1600u, 900u, "gEngine", this} {}
   void run() {
     initVulkan();
@@ -1531,7 +1531,7 @@ int main(int argc, char *argv[]) {
   std::cout << "Debug\n";
 #endif // Debug
 
-  EnvHandler EH{argv[0]};
+  gEng::SysEnv EH{argv[0]};
 
   HelloTriangleApplication app{EH};
   try {

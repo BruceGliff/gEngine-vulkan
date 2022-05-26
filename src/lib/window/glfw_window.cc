@@ -10,7 +10,7 @@ static void framebufferResizeCallback(GLFWwindow *Window, int Width,
   User->IsResized = true;
 }
 
-namespace gEng {
+using namespace gEng;
 
 UserWindow::~UserWindow() {}
 
@@ -73,5 +73,3 @@ std::pair<uint32_t, uint32_t> Window::getNativeExtent() const {
 }
 
 bool Window::isShouldClose() const { return glfwWindowShouldClose(WrapWindow); }
-
-} // namespace gEng

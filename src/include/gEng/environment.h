@@ -7,8 +7,10 @@ namespace fs {
 using path = std::filesystem::path;
 } // namespace fs
 
-struct EnvHandler {
-  EnvHandler(char const *);
+namespace gEng {
+
+struct SysEnv {
+  SysEnv(char const *);
 
   std::string getPathStr() const;
   std::string getFilenameStr() const;
@@ -19,3 +21,5 @@ private:
   fs::path BinPath;
   fs::path FileName;
 };
+
+} // namespace gEng
