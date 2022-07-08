@@ -16,6 +16,7 @@
 #include "shader/shader.h"
 #include "vertex.h"
 
+#include "gEng/device_manager.h"
 #include "gEng/environment.h"
 #include "gEng/window.h"
 
@@ -1349,6 +1350,9 @@ private:
   }
 
   void createInstance() {
+
+    gEng::DeviceManager DevMgr;
+
     // TODO believe this logic has to be moved somewhere to call constructor of
     // m_instance only once, fe: m_instance{createInstance}.
     if (m_enableValidationLayers && !checkValidationLayers())
@@ -1406,7 +1410,7 @@ private:
 
   void mainLoop() {
 
-    uint32_t const MaxFrames{5};
+    uint32_t const MaxFrames{10000};
     uint32_t Frame{0};
 
     while (!m_Window.isShouldClose() && Frame++ < MaxFrames) {
