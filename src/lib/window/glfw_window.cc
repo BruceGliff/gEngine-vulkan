@@ -73,9 +73,3 @@ std::pair<uint32_t, uint32_t> Window::getNativeExtent() const {
 }
 
 bool Window::isShouldClose() const { return glfwWindowShouldClose(WrapWindow); }
-
-std::vector<char const *> Window::getExtensions() {
-  uint32_t ExtensionCount{};
-  const char **Extensions = glfwGetRequiredInstanceExtensions(&ExtensionCount);
-  return {Extensions, Extensions + ExtensionCount};
-}

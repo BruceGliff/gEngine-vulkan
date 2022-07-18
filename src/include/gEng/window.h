@@ -3,7 +3,6 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
-#include <vector>
 
 // Forward declaration.
 // Wrap.
@@ -48,8 +47,6 @@ public:
   std::pair<uint32_t, uint32_t> updExtent();
   std::pair<uint32_t, uint32_t> getExtent() const;
   bool isShouldClose() const;
-
-  static std::vector<char const *> getExtensions();
 
   vk::SurfaceKHR createSurface(vk::Instance const &Instance) const;
 };
