@@ -12,6 +12,9 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
+// BAD. JUST A PLACEHOLDER
+#include "lib/global.h"
+
 #include "image/image.h"
 #include "shader/shader.h"
 #include "vertex.h"
@@ -1132,6 +1135,8 @@ private:
                                                   : std::vector<char const *>{};
     m_device = m_physicalDevice.createDevice(
         {{}, QueueCreateInfos, Layers, m_deviceExtensions, &DevFeat});
+
+    GL::setDevice(m_device);
 
     // We can use the vkGetDeviceQueue function to retrieve queue handles for
     // each queue family. The parameters are the logical device, queue family,
