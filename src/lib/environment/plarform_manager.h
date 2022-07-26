@@ -36,6 +36,8 @@ public:
 
   vk::Instance createInstance();
   vk::SurfaceKHR createSurface(gEng::Window const &Window);
+  vk::PhysicalDevice createPhysicalDevice();
+  vk::Device createDevice();
 
   ~PltManager();
 

@@ -74,14 +74,38 @@ vk::Instance PltManager::createInstance() {
 }
 
 vk::SurfaceKHR PltManager::createSurface(gEng::Window const &Window) {
+  if (!Instance)
+    throw std::runtime_error("Cannot create Surface without Instance.");
+  vk::Instance &Inst = Instance.value();
+
   if (Surface) {
     std::cerr << "Surface already has been created.\n";
     return Surface.value();
   }
 
-  Surface = Window.createSurface(Instance.value());
+  Surface = Window.createSurface(Inst);
   return Surface.value();
 }
+
+vk::PhysicalDevice PltManager::createPhysicalDevice() {
+  if (!Instance)
+    throw std::runtime_error("Cannot create physical device without Instance.");
+  vk::Instance &Inst = Instance.value();
+
+  std::vector<vk::PhysicalDevice> Devices = Inst.enumeratePhysicalDevices();
+
+  // TODO stops here!
+  auto FindIt =
+      std::find_if(Devices.begin(), Devices.end(),
+                   [this](auto &&Device) { return isDeviceSuitable(Device); });
+  if (FindIt == Devices.end())
+    throw std::runtime_error("failed to find a suitable GPU!");
+
+  m_physicalDevice = *FindIt;
+  msaaSamples = getMaxUsableSampleCount();
+}
+
+vk::Device PltManager::createDevice() {}
 
 PltManager::~PltManager() {
   // Dev.destroy();
