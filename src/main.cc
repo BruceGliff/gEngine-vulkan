@@ -13,7 +13,8 @@
 #include <tiny_obj_loader.h>
 
 // BAD. JUST A PLACEHOLDER
-#include "lib/global.h"
+// #include "lib/global.h"
+#include "lib/environment/platform_handler.h"
 
 #include "image/image.h"
 #include "shader/shader.h"
@@ -1136,7 +1137,7 @@ private:
     m_device = m_physicalDevice.createDevice(
         {{}, QueueCreateInfos, Layers, m_deviceExtensions, &DevFeat});
 
-    GL::setDevice(m_device);
+    gEng::PlatformHandler::set<vk::Device>(m_device);
 
     // We can use the vkGetDeviceQueue function to retrieve queue handles for
     // each queue family. The parameters are the logical device, queue family,
@@ -1424,12 +1425,13 @@ private:
 
   uint32_t currentFrame = 0;
   void drawFrame() {
+    vk::Device Dev = gEng::PlatformHandler::get<vk::Device>();
 
-    if (m_device.waitForFences(m_inFlightFence[currentFrame], VK_TRUE,
-                               UINT64_MAX) != vk::Result::eSuccess)
+    if (Dev.waitForFences(m_inFlightFence[currentFrame], VK_TRUE, UINT64_MAX) !=
+        vk::Result::eSuccess)
       throw std::runtime_error("Fail to wait fance");
 
-    auto [Res, ImgIdx] = m_device.acquireNextImageKHR(
+    auto [Res, ImgIdx] = Dev.acquireNextImageKHR(
         m_swapchain, UINT64_MAX, m_imageAvailableSemaphore[currentFrame], {});
     if (Res == vk::Result::eErrorOutOfDateKHR)
       recreateSwapchain();
@@ -1439,7 +1441,7 @@ private:
     updateUniformBuffer(currentFrame);
 
     // Only reset the fence if we are submitting work
-    m_device.resetFences(m_inFlightFence[currentFrame]);
+    Dev.resetFences(m_inFlightFence[currentFrame]);
     m_commandBuffers[currentFrame].reset();
     recordCommandBuffer(m_commandBuffers[currentFrame], ImgIdx);
 
