@@ -211,8 +211,12 @@ private:
     m_physicalDevice = gEng::PlatformHandler::get<vk::PhysicalDevice>();
     m_device = gEng::PlatformHandler::get<vk::Device>();
 
-    pickPhysicalDevice();
-    createLogicalDevice();
+    // pickPhysicalDevice();
+    msaaSamples = getMaxUsableSampleCount();
+    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
+    m_graphicsQueue = m_device.getQueue(Indices.GraphicsFamily.value(), 0);
+    m_presentQueue = m_device.getQueue(Indices.PresentFamily.value(), 0);
+    // createLogicalDevice();
     createSwapchain();
     createImageViews();
     createRenderPass();
@@ -1158,8 +1162,6 @@ private:
     // queue index and a pointer to the variable to store the queue handle in.
     // Because we're only creating a single queue from this family, we'll simply
     // use index 0.
-    m_graphicsQueue = m_device.getQueue(Indices.GraphicsFamily.value(), 0);
-    m_presentQueue = m_device.getQueue(Indices.PresentFamily.value(), 0);
   }
 
   void pickPhysicalDevice() {
@@ -1534,9 +1536,6 @@ private:
       m_device.destroyFence(Fence);
 
     m_device.destroyCommandPool(m_commandPool);
-
-    // TODO: Do I need this destroy?
-    m_device.destroy();
   }
 };
 
