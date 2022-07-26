@@ -1,5 +1,7 @@
 #include "gEng/window.h"
 
+#include "glfw_window.h"
+
 #include <vulkan/vulkan.hpp>
 #include <GLFW/glfw3.h>
 
@@ -73,3 +75,16 @@ std::pair<uint32_t, uint32_t> Window::getNativeExtent() const {
 }
 
 bool Window::isShouldClose() const { return glfwWindowShouldClose(WrapWindow); }
+
+std::vector<char const *> gEng::getRequiredExtensions(bool EnableDebug) {
+  uint32_t ExtensionCount{};
+  const char **Extensions = glfwGetRequiredInstanceExtensions(&ExtensionCount);
+
+  std::vector<const char *> AllExtensions{Extensions,
+                                          Extensions + ExtensionCount};
+  // Addition for callback.
+  if (EnableDebug)
+    AllExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+  return AllExtensions;
+}

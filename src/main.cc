@@ -14,6 +14,7 @@
 
 // BAD. JUST A PLACEHOLDER
 // #include "lib/global.h"
+#include "lib/environment/plarform_manager.h"
 #include "lib/environment/platform_handler.h"
 
 #include "image/image.h"
@@ -194,9 +195,22 @@ public:
 private:
 
   void initVulkan() {
-    createInstance();
-    setupDebugMessenger();
-    m_surface = m_Window.createSurface(m_instance);
+    // createInstance();
+    // setupDebugMessenger();
+    auto &PltMgn = gEng::PltManager::getMgrInstance();
+
+    gEng::PlatformHandler::set(PltMgn.createInstance());
+    gEng::PlatformHandler::set(PltMgn.createSurface(m_Window));
+
+    gEng::PlatformHandler::set(PltMgn.createPhysicalDevice());
+    gEng::PlatformHandler::set(PltMgn.createDevice());
+
+    m_instance = gEng::PlatformHandler::get<vk::Instance>();
+    m_surface = gEng::PlatformHandler::get<vk::SurfaceKHR>();
+
+    m_physicalDevice = gEng::PlatformHandler::get<vk::PhysicalDevice>();
+    m_device = gEng::PlatformHandler::get<vk::Device>();
+
     pickPhysicalDevice();
     createLogicalDevice();
     createSwapchain();
@@ -1523,13 +1537,6 @@ private:
 
     // TODO: Do I need this destroy?
     m_device.destroy();
-
-    if (m_enableValidationLayers)
-      m_instance.destroyDebugUtilsMessengerEXT(m_debugMessenger);
-
-    m_instance.destroySurfaceKHR(m_surface);
-    // TODO: Do I need this destroy?
-    m_instance.destroy();
   }
 };
 
