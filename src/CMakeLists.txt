@@ -10,7 +10,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/in
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O0 -g )
 target_include_directories(${PROJECT_NAME} PUBLIC ${LIBRARY_INCLUDE_PATH})
-target_link_libraries(${PROJECT_NAME} glfw Vulkan::Vulkan)
+target_link_libraries(${PROJECT_NAME} glfw Vulkan::Vulkan Boost::program_options)
 
 set(OUT_DIR ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME})
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR})
