@@ -1427,11 +1427,12 @@ private:
   }
 
   void mainLoop() {
-
-    uint32_t const MaxFrames{5};
     uint32_t Frame{0};
 
-    while (!m_Window.isShouldClose() && Frame++ < MaxFrames) {
+    auto FrameLimit = EH.getFramesLimit();
+
+    while (!m_Window.isShouldClose() &&
+           !(FrameLimit && Frame++ > FrameLimit.value())) {
       glfwPollEvents();
       drawFrame();
     }
@@ -1544,7 +1545,9 @@ int main(int argc, char *argv[]) {
   std::cout << "Debug\n";
 #endif // Debug
 
-  gEng::SysEnv EH{argv[0]};
+  gEng::SysEnv EH{argc, argv};
+  if (EH.getHelp())
+    return EXIT_SUCCESS;
 
   HelloTriangleApplication app{EH};
   try {
