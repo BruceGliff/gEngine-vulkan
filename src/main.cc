@@ -22,6 +22,7 @@
 #include "vertex.h"
 
 #include "gEng/environment.h"
+#include "gEng/global.h"
 #include "gEng/window.h"
 
 #include <algorithm>
