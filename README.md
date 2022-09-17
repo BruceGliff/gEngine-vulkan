@@ -10,6 +10,7 @@ External dependencies on binaries and packages:
   - libvulkan-dev
   - vulkan-validationlayers-dev
   - spirv-tools
+  - boost
 - [GLFW](https://github.com/glfw/glfw) - Window dependency
 - [glm](https://github.com/g-truc/glm) - Geometry operations for 3D
 - [stb](https://github.com/nothings/stb) - Image loading
