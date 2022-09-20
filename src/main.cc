@@ -14,7 +14,7 @@
 
 // BAD. JUST A PLACEHOLDER
 // #include "lib/global.h"
-#include "lib/environment/plarform_manager.h"
+#include "lib/environment/platform_manager.h"
 #include "lib/environment/platform_handler.h"
 
 #include "image/image.h"

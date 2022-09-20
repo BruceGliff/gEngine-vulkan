@@ -1,4 +1,4 @@
-#include "plarform_manager.h"
+#include "platform_manager.h"
 
 #include "../window/glfw_window.h"
 
