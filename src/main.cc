@@ -13,9 +13,8 @@
 #include <tiny_obj_loader.h>
 
 // BAD. JUST A PLACEHOLDER
-// #include "lib/global.h"
-#include "lib/environment/plarform_manager.h"
 #include "lib/environment/platform_handler.h"
+#include "lib/environment/platform_manager.h"
 
 #include "image/image.h"
 #include "shader/shader.h"
@@ -198,7 +197,7 @@ private:
   void initVulkan() {
     // createInstance();
     // setupDebugMessenger();
-    auto &PltMgn = gEng::PltManager::getMgrInstance();
+    auto &PltMgn = gEng::PltManager::getInstance();
 
     gEng::PlatformHandler::set(PltMgn.createInstance());
     gEng::PlatformHandler::set(PltMgn.createSurface(m_Window));
@@ -1549,6 +1548,9 @@ int main(int argc, char *argv[]) {
   gEng::SysEnv EH{argc, argv};
   if (EH.getHelp())
     return EXIT_SUCCESS;
+
+  // auto GlbMgr = gEng::GlbManager::getInstance();
+  // GlbMgr.registerEntity<int>(10);
 
   HelloTriangleApplication app{EH};
   try {

@@ -2,10 +2,6 @@
 
 using namespace gEng;
 
-std::unique_ptr<GlbManager> GlbManager::Mgr{nullptr};
-GlbManager &GlbManager::getInstance() {
-  if (Mgr)
-    return *Mgr.get();
-  Mgr = std::unique_ptr<GlbManager>(new GlbManager{});
-  return *Mgr.get();
-}
+template <>
+std::unique_ptr<SingletoneBase<GlbManager>> SingletoneBase<GlbManager>::Mgr{
+    nullptr};

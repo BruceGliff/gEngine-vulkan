@@ -1,5 +1,6 @@
 #pragma once
 
+#include "gEng/utils/singletone_base.h"
 #include "gEng/window.h"
 
 #include "debug_callback.h"
@@ -29,16 +30,11 @@ struct QueueFamilyIndices {
 
 // This class designed to generate and release all platform specific vk handles.
 // This is singleton.
-class PltManager {
-  static std::unique_ptr<PltManager> Mgr;
-
+class PltManager : public SingletoneBase<PltManager> {
   std::optional<vk::Instance> Instance{};
   std::optional<vk::Device> Device{};
   std::optional<vk::SurfaceKHR> Surface{};
   vk::PhysicalDevice PhysDev;
-
-  // Private constructor as it accessable from getInstance but only from it.
-  PltManager() {}
 
   // Determines if Device is matched requirements.
   bool isDeviceSuitable(vk::PhysicalDevice const &Device) const;
@@ -49,9 +45,6 @@ public:
 #else
   static bool constexpr EnableDebug{false};
 #endif
-
-  // Returns instance of the platform manager.
-  static PltManager &getMgrInstance();
 
   vk::Instance createInstance();
   vk::SurfaceKHR createSurface(gEng::Window const &Window);
