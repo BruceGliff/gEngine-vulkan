@@ -21,14 +21,15 @@ class GlbManager : public singleton<GlbManager> {
   using RegsTable = std::unordered_map<std::type_index, void *>;
   RegsTable Regs;
 
-  template <typename T> T *castIt(auto const &It) const;
+  template <typename T> inline T *castIt(auto const &It) const;
 
 public:
-  template <typename T, typename... Args> T &registerEntity(Args &&...args);
+  template <typename T, typename... Args>
+  inline T &registerEntity(Args &&...args);
 
-  template <typename T> T *getEntityIfPossible() const;
+  template <typename T> inline T *getEntityIfPossible() const;
 
-  template <typename T> T &getEntity() const;
+  template <typename T> inline T &getEntity() const;
 };
 
 } // namespace gEng

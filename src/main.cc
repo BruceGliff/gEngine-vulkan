@@ -187,6 +187,12 @@ public:
   HelloTriangleApplication(gEng::SysEnv &InEH)
       : EH{InEH}, m_Window{1600u, 900u, "gEngine", this} {}
   void run() {
+
+    // TODO this is just to test GlbManager interface.
+    auto &G = gEng::GlbManager::getInstance();
+    G.registerEntity<int>(4);
+    std::cout << G.getEntity<int>();
+
     initVulkan();
     mainLoop();
     cleanup();
