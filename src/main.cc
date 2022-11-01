@@ -12,8 +12,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-// BAD. JUST A PLACEHOLDER
-// #include "lib/global.h"
+// BAD. just a placeholder
 #include "lib/environment/platform_manager.h"
 #include "lib/environment/platform_handler.h"
 
@@ -198,7 +197,7 @@ private:
   void initVulkan() {
     // createInstance();
     // setupDebugMessenger();
-    auto &PltMgn = gEng::PltManager::getMgrInstance();
+    auto &PltMgn = gEng::PltManager::getInstance();
 
     gEng::PlatformHandler::set(PltMgn.createInstance());
     gEng::PlatformHandler::set(PltMgn.createSurface(m_Window));

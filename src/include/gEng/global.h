@@ -1,5 +1,7 @@
 #pragma once
 
+#include "gEng/utils/singleton.h"
+
 #include <cassert>
 #include <iostream>
 #include <memory>
@@ -10,9 +12,8 @@ namespace gEng {
 
 // Class represents singleton which is accessable from every point of the
 // program.
-struct GlbManager {
-private:
-  static std::unique_ptr<GlbManager> Mgr;
+class GlbManager : public singleton<GlbManager> {
+  friend singleton;
   GlbManager() {}
 
   // Handle memory has another specific class.
@@ -23,8 +24,6 @@ private:
   template <typename T> T *castIt(auto const &It) const;
 
 public:
-  static GlbManager &getInstance();
-
   template <typename T, typename... Args> T &registerEntity(Args &&...args);
 
   template <typename T> T *getEntityIfPossible() const;

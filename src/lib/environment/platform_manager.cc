@@ -11,16 +11,6 @@
 
 using namespace gEng;
 
-std::unique_ptr<PltManager> PltManager::Mgr{nullptr};
-PltManager &PltManager::getMgrInstance() {
-  PltManager *Ptr = Mgr.get();
-  if (Ptr)
-    return *Ptr;
-
-  Mgr = std::unique_ptr<PltManager>(new PltManager{});
-  return *Mgr.get();
-}
-
 std::vector<char const *> const DeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
