@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <ranges>
 #include <set>
 #include <string_view>
 #include <type_traits>
@@ -14,19 +15,24 @@ using namespace gEng;
 std::vector<char const *> const DeviceExtensions = {
     VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
-template <bool EnableDebug> static auto constexpr getValidationLayers() {
-  if constexpr (EnableDebug)
-    return std::array{"VK_LAYER_KHRONOS_validation"};
-  else
-    return nullptr;
+// In case if debug mode is disabled returns nullptr.
+// That means no validation layers.
+template <bool EnableDebug> auto constexpr getValidationLayers() {
+  return nullptr;
+}
+// In case if in debug mode here should be specified all validation layers.
+template <> auto constexpr getValidationLayers<true>() {
+  return std::array{"VK_LAYER_KHRONOS_validation"};
 }
 
-template <typename ValLayer>
-static bool checkValidationLayers(ValLayer const &ValidationLayers) {
-  // If there is no validation layers then no need to check.
-  if constexpr (!std::is_class_v<ValLayer>)
-    return true;
+// In case if there no layers - returns true.
+template <typename Other> static bool checkValidationLayers(Other const &) {
+  return true;
+}
 
+// Check all available layers.
+static bool
+checkValidationLayers(std::ranges::range auto const &ValidationLayers) {
   auto AvailableLayers = vk::enumerateInstanceLayerProperties();
   std::unordered_set<std::string_view> UniqueLayers;
   std::for_each(AvailableLayers.begin(), AvailableLayers.end(),
