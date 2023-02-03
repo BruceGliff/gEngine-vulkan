@@ -205,6 +205,9 @@ private:
     // setupDebugMessenger();
     auto &PltMgn = gEng::PltManager::getInstance();
 
+    // TODO: remake PlatformHandler::set<vk::Instance>(/*constructor or pass
+    // builder*/) and in PlatformHadler prepared std::tupple.
+    // FIXME delete later PltManager and PlatformHandler
     gEng::PlatformHandler::set(PltMgn.createInstance());
     gEng::PlatformHandler::set(PltMgn.createSurface(m_Window));
 
