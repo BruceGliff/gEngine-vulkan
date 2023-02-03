@@ -1,7 +1,10 @@
-
 #include "PlatformBuilder.h"
 
+#include "gEng/window.h"
+#include "debug_callback.h"
 #include "../window/glfw_window.h"
+
+#include <vulkan/vulkan.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -49,7 +52,7 @@ checkValidationLayers(std::ranges::range auto const &ValidationLayers) {
                      });
 }
 
-CREATE(vk::Instance)() {
+CREATE(vk::Instance)(DebugMessenger<EnableDebug> &DbgMsger) {
   vk::ApplicationInfo AppInfo{"Hello triangle", VK_MAKE_VERSION(1, 0, 0),
                               "No Engine", VK_MAKE_VERSION(1, 0, 0),
                               VK_API_VERSION_1_0};
@@ -68,15 +71,16 @@ CREATE(vk::Instance)() {
 
   vk::Instance Instance = vk::createInstance(CreateInfo);
 
+  // FIXME DbgMsger as argument is dirty hack.
   DbgMsger = DebugMessenger<EnableDebug>{Instance};
   return Instance;
 }
 
-CREATE(vk::SurfaceKHR)(vk::Instance Inst, gEng::Window const &Window) {
+CREATE(vk::SurfaceKHR)(vk::Instance &&Inst, gEng::Window const &Window) {
   return Window.createSurface(Inst);
 }
 
-QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice const &PhysDev) {
+QueueFamilyIndices gEng::findQueueFamilies(vk::SurfaceKHR Surface, vk::PhysicalDevice const &PhysDev) {
   QueueFamilyIndices Indices;
   std::vector<vk::QueueFamilyProperties> QueueFamilies =
       PhysDev.getQueueFamilyProperties();
@@ -91,7 +95,7 @@ QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice const &PhysDev) {
       Indices.GraphicsFamily = i;
 
     // Checks for presentation family support.
-    if (PhysDev.getSurfaceSupportKHR(i, Surface.value()))
+    if (PhysDev.getSurfaceSupportKHR(i, Surface))
       Indices.PresentFamily = i;
 
     // Not quite sure why the hell we need this early-break.
@@ -140,9 +144,8 @@ static bool checkDeviceExtensionSupport(vk::PhysicalDevice const &Device) {
 }
 
 // Checks if device is suitable for our extensions and purposes.
-bool PlatformManager::isDeviceSuitable(vk::PhysicalDevice const &Device) const {
+static bool isDeviceSuitable(vk::SurfaceKHR Surface, vk::PhysicalDevice const &Device) {
   // FIXME const?
-  auto &Surface = get<vk::SurfaceKHR>();
   // name, type, supported Vulkan version can be quired via
   // GetPhysicalDeviceProperties.
   // vk::PhysicalDeviceProperties DeviceProps = Device.getProperties();
@@ -164,29 +167,29 @@ bool PlatformManager::isDeviceSuitable(vk::PhysicalDevice const &Device) const {
   };
 
   // But we want to find out if GPU is graphicFamily. (?)
-  return findQueueFamilies(Device).isComplete() &&
+  return findQueueFamilies(Surface, Device).isComplete() &&
          checkDeviceExtensionSupport(Device) &&
          swapchainSupport(querySwapchainSupport(Device, Surface)) &&
          DeviceFeat.samplerAnisotropy;
   // All three ckecks are different. WTF!
 }
 
-CREATE(vk::PhysicalDevice)(vk::Instance Inst) {
+CREATE(vk::PhysicalDevice)(vk::SurfaceKHR &&Surface, vk::Instance &&Inst) {
   std::vector<vk::PhysicalDevice> Devices = Inst.enumeratePhysicalDevices();
 
   // TODO stops here!
   auto FindIt =
       std::find_if(Devices.begin(), Devices.end(),
-                   [this](auto &&Device) { return isDeviceSuitable(Device); });
+                   [&Surface](auto &&Device) { return isDeviceSuitable(Surface, Device); });
   if (FindIt == Devices.end())
     throw std::runtime_error("failed to find a suitable GPU!");
 
   return *FindIt;
 }
 
-CREATE(vk::Device)(vk::PhysicalDevice PhysDev) {
+CREATE(vk::Device)(vk::SurfaceKHR &&Surface, vk::PhysicalDevice &&PhysDev) {
   // TODO rethink about using findQueueFamilieses once.
-  QueueFamilyIndices Indices = findQueueFamilies(PhysDev);
+  QueueFamilyIndices Indices = findQueueFamilies(Surface, PhysDev);
 
   // Each queue family has to have own VkDeviceQueueCreateInfo.
   std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos{};

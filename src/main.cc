@@ -13,8 +13,7 @@
 #include <tiny_obj_loader.h>
 
 // BAD. just a placeholder
-#include "lib/environment/platform_manager.h"
-#include "lib/environment/platform_handler.h"
+#include "lib/environment/PlatformManager.h"
 
 #include "image/image.h"
 #include "shader/shader.h"
@@ -203,26 +202,21 @@ private:
   void initVulkan() {
     // createInstance();
     // setupDebugMessenger();
-    auto &PltMgn = gEng::PltManager::getInstance();
+    auto &PltMgn = gEng::PlatformManager::getInstance();
 
+    PltMgn.init(m_Window);
     // TODO: remake PlatformHandler::set<vk::Instance>(/*constructor or pass
     // builder*/) and in PlatformHadler prepared std::tupple.
-    // FIXME delete later PltManager and PlatformHandler
-    gEng::PlatformHandler::set(PltMgn.createInstance());
-    gEng::PlatformHandler::set(PltMgn.createSurface(m_Window));
 
-    gEng::PlatformHandler::set(PltMgn.createPhysicalDevice());
-    gEng::PlatformHandler::set(PltMgn.createDevice());
+    m_instance = PltMgn.get<vk::Instance>();
+    m_surface = PltMgn.get<vk::SurfaceKHR>();
 
-    m_instance = gEng::PlatformHandler::get<vk::Instance>();
-    m_surface = gEng::PlatformHandler::get<vk::SurfaceKHR>();
-
-    m_physicalDevice = gEng::PlatformHandler::get<vk::PhysicalDevice>();
-    m_device = gEng::PlatformHandler::get<vk::Device>();
+    m_physicalDevice = PltMgn.get<vk::PhysicalDevice>();
+    m_device = PltMgn.get<vk::Device>();
 
     // pickPhysicalDevice();
     msaaSamples = getMaxUsableSampleCount();
-    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
+    gEng::QueueFamilyIndices Indices = gEng::findQueueFamilies(m_surface, m_physicalDevice);
     m_graphicsQueue = m_device.getQueue(Indices.GraphicsFamily.value(), 0);
     m_presentQueue = m_device.getQueue(Indices.PresentFamily.value(), 0);
     // createLogicalDevice();
@@ -872,7 +866,7 @@ private:
   }
 
   void createCommandPool() {
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physicalDevice);
+    gEng::QueueFamilyIndices queueFamilyIndices = gEng::findQueueFamilies(m_surface, m_physicalDevice);
     m_commandPool = m_device.createCommandPool(
         {vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
          queueFamilyIndices.GraphicsFamily.value()});
@@ -1106,7 +1100,7 @@ private:
         ImageCount > SwapchainSupport.capabilities.maxImageCount)
       ImageCount = SwapchainSupport.capabilities.maxImageCount;
 
-    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
+    gEng::QueueFamilyIndices Indices = gEng::findQueueFamilies(m_surface, m_physicalDevice);
     bool const IsFamiliesSame = Indices.GraphicsFamily == Indices.PresentFamily;
     // Next, we need to specify how to handle swap chain images that will be
     // used across multiple queue families.
@@ -1138,71 +1132,6 @@ private:
     m_swapchainImages = m_device.getSwapchainImagesKHR(m_swapchain);
   }
 
-  void createLogicalDevice() {
-    // TODO rethink about using findQueueFamilieses once.
-    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
-
-    // Each queue family has to have own VkDeviceQueueCreateInfo.
-    std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos{};
-    // This is the worst way of doing it. Rethink!
-    std::set<uint32_t> UniqueIdc = {Indices.GraphicsFamily.value(),
-                                    Indices.PresentFamily.value()};
-    // TODO: what is this?
-    std::array<float, 1> const QueuePriority = {1.f};
-    for (uint32_t Family : UniqueIdc)
-      QueueCreateInfos.push_back(
-          vk::DeviceQueueCreateInfo{{}, Family, QueuePriority});
-
-    vk::PhysicalDeviceFeatures DevFeat{};
-    DevFeat.samplerAnisotropy = VK_TRUE;
-    DevFeat.sampleRateShading = VK_TRUE;
-
-    // TODO: rethink this approach. May be use smth like std::optional.
-    std::vector<char const *> const &Layers = m_enableValidationLayers
-                                                  ? m_validationLayers
-                                                  : std::vector<char const *>{};
-    m_device = m_physicalDevice.createDevice(
-        {{}, QueueCreateInfos, Layers, m_deviceExtensions, &DevFeat});
-
-    gEng::PlatformHandler::set<vk::Device>(m_device);
-
-    // We can use the vkGetDeviceQueue function to retrieve queue handles for
-    // each queue family. The parameters are the logical device, queue family,
-    // queue index and a pointer to the variable to store the queue handle in.
-    // Because we're only creating a single queue from this family, we'll simply
-    // use index 0.
-  }
-
-  void pickPhysicalDevice() {
-    std::vector<vk::PhysicalDevice> Devices =
-        m_instance.enumeratePhysicalDevices();
-
-    auto FindIt =
-        std::find_if(Devices.begin(), Devices.end(), [this](auto &&Device) {
-          return isDeviceSuitable(Device);
-        });
-    if (FindIt == Devices.end())
-      throw std::runtime_error("failed to find a suitable GPU!");
-
-    m_physicalDevice = *FindIt;
-    msaaSamples = getMaxUsableSampleCount();
-  }
-
-  // Checks which queue families are supported by the device and which one of
-  // these supports the commands that we want to use.
-  struct QueueFamilyIndices {
-    // optional just because we may be want to select GPU with some family, but
-    // it is not strictly necessary.
-    std::optional<uint32_t> GraphicsFamily{};
-    // Not every device can support presentation of the image, so need to
-    // check that divece has proper family queue.
-    std::optional<uint32_t> PresentFamily{};
-
-    bool isComplete() {
-      return GraphicsFamily.has_value() && PresentFamily.has_value();
-    }
-  };
-
   // Swapchain requires more details to be checked.
   // - basic surface capabilities.
   // - surface format (pixel format, color space).
@@ -1222,32 +1151,6 @@ private:
         .presentModes = Device.getSurfacePresentModesKHR(m_surface)};
   }
 
-  QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice const &Device) {
-    QueueFamilyIndices Indices;
-    std::vector<vk::QueueFamilyProperties> QueueFamilies =
-        Device.getQueueFamilyProperties();
-
-    // TODO: rething this approach.
-    uint32_t i{0};
-    for (auto &&queueFamily : QueueFamilies) {
-      // For better performance one queue family has to support all requested
-      // queues at once, but we also can treat them as different families for
-      // unified approach.
-      if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
-        Indices.GraphicsFamily = i;
-
-      // Checks for presentation family support.
-      if (Device.getSurfaceSupportKHR(i, m_surface))
-        Indices.PresentFamily = i;
-
-      // Not quite sure why the hell we need this early-break.
-      if (Indices.isComplete())
-        return Indices;
-      ++i;
-    }
-
-    return QueueFamilyIndices{};
-  }
 
   // We want to select format.
   vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
@@ -1299,36 +1202,6 @@ private:
                      Capabilities.maxImageExtent.height);
       return {RealW, RealH};
     }
-  }
-
-  // Checks if device is suitable for our extensions and purposes.
-  bool isDeviceSuitable(vk::PhysicalDevice const &Device) {
-    // name, type, supported Vulkan version can be quired via
-    // GetPhysicalDeviceProperties.
-    // vk::PhysicalDeviceProperties DeviceProps = Device.getProperties();
-
-    // optional features like texture compressing, 64bit floating operations,
-    // multiview-port and so one...
-    vk::PhysicalDeviceFeatures DeviceFeat = Device.getFeatures();
-
-    // Right now I have only one INTEGRATED GPU(on linux). But it will be more
-    // suitable to calculate score and select preferred GPU with the highest
-    // score. (eg. discrete GPU has +1000 score..)
-
-    // Swap chain support is sufficient for this tutorial if there is at least
-    // one supported image format and one supported presentation mode given
-    // the window surface we have.
-    auto swapchainSupport = [](SwapchainSupportDetails swapchainDetails) {
-      return !swapchainDetails.formats.empty() &&
-             !swapchainDetails.presentModes.empty();
-    };
-
-    // But we want to find out if GPU is graphicFamily. (?)
-    return findQueueFamilies(Device).isComplete() &&
-           checkDeviceExtensionSupport(Device) &&
-           swapchainSupport(querySwapchainSupport(Device)) &&
-           DeviceFeat.samplerAnisotropy;
-    // All three ckecks are different. WTF!
   }
 
   bool checkDeviceExtensionSupport(vk::PhysicalDevice const &Device) {
@@ -1451,7 +1324,7 @@ private:
 
   uint32_t currentFrame = 0;
   void drawFrame() {
-    vk::Device Dev = gEng::PlatformHandler::get<vk::Device>();
+    vk::Device Dev = m_device;
 
     if (Dev.waitForFences(m_inFlightFence[currentFrame], VK_TRUE, UINT64_MAX) !=
         vk::Result::eSuccess)
