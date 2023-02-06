@@ -3,6 +3,7 @@
 #include "gEng/utils/singleton.h"
 #include "gEng/window.h"
 
+#include "Builder.hpp"
 #include "debug_callback.h"
 
 #include <cstdint>
@@ -33,6 +34,8 @@ struct QueueFamilyIndices {
 class PltManager : public singleton<PltManager> {
   friend singleton;
   PltManager() {}
+
+  PltBuilder B;
 
   std::optional<vk::Instance> Instance{};
   std::optional<vk::Device> Device{};

@@ -1,7 +1,5 @@
 #include "platform_manager.h"
 
-#include "Builder.hpp"
-
 #include "../window/glfw_window.h"
 
 #include <algorithm>
@@ -48,22 +46,12 @@ checkValidationLayers(std::ranges::range auto const &ValidationLayers) {
 }
 
 vk::Instance PltManager::createInstance() {
-  gEng::PltBuilder B;
   Instance = B.create<vk::Instance>(DbgMsger);
   return Instance.value();
 }
 
 vk::SurfaceKHR PltManager::createSurface(gEng::Window const &Window) {
-  if (!Instance)
-    throw std::runtime_error("Cannot create Surface without Instance.");
-  vk::Instance &Inst = Instance.value();
-
-  if (Surface) {
-    std::cerr << "Surface already has been created.\n";
-    return Surface.value();
-  }
-
-  Surface = Window.createSurface(Inst);
+  Surface = B.create<vk::SurfaceKHR>(Instance.value(), Window);
   return Surface.value();
 }
 

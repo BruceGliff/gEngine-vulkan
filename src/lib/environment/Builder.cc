@@ -68,3 +68,9 @@ PltBuilder::create<vk::Instance>(DebugMessenger<EnableDebug> &DbgMsger) {
   DbgMsger = DebugMessenger<EnableDebug>{Instance};
   return Instance;
 }
+
+template <>
+vk::SurfaceKHR PltBuilder::create<vk::SurfaceKHR>(vk::Instance &Inst,
+                                                  gEng::Window const &Window) {
+  return Window.createSurface(Inst);
+}
