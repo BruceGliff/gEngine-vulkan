@@ -152,20 +152,7 @@ bool PltManager::isDeviceSuitable(vk::PhysicalDevice const &Device) const {
 }
 
 vk::PhysicalDevice PltManager::createPhysicalDevice() {
-  if (!Instance)
-    throw std::runtime_error("Cannot create physical device without Instance.");
-  vk::Instance &Inst = Instance.value();
-
-  std::vector<vk::PhysicalDevice> Devices = Inst.enumeratePhysicalDevices();
-
-  // TODO stops here!
-  auto FindIt =
-      std::find_if(Devices.begin(), Devices.end(),
-                   [this](auto &&Device) { return isDeviceSuitable(Device); });
-  if (FindIt == Devices.end())
-    throw std::runtime_error("failed to find a suitable GPU!");
-
-  PhysDev = *FindIt;
+  PhysDev = B.create<vk::PhysicalDevice>(Instance.value(), Surface.value());
   return PhysDev;
 }
 
