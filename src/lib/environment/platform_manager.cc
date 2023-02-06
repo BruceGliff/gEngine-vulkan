@@ -1,5 +1,7 @@
 #include "platform_manager.h"
 
+#include "Builder.hpp"
+
 #include "../window/glfw_window.h"
 
 #include <algorithm>
@@ -46,30 +48,8 @@ checkValidationLayers(std::ranges::range auto const &ValidationLayers) {
 }
 
 vk::Instance PltManager::createInstance() {
-  if (Instance) {
-    std::cerr << "Instance already has been created.\n";
-    return Instance.value();
-  }
-
-  vk::ApplicationInfo AppInfo{"Hello triangle", VK_MAKE_VERSION(1, 0, 0),
-                              "No Engine", VK_MAKE_VERSION(1, 0, 0),
-                              VK_API_VERSION_1_0};
-
-  std::vector<char const *> Extensions{getRequiredExtensions(EnableDebug)};
-
-  auto constexpr Layers = getValidationLayers<EnableDebug>();
-  if (!checkValidationLayers(Layers))
-    throw std::runtime_error{"Requestred validation layers are not available!"};
-
-  vk::InstanceCreateInfo CreateInfo{{}, &AppInfo, Layers, Extensions};
-
-  // In DebugInfo pointer is uses. It has to be investigated, but for now I
-  // assume that DebugInfo and createInstance has to be in the same stack frame.
-  DebugInfo<EnableDebug> DI{CreateInfo};
-
-  Instance = vk::createInstance(CreateInfo);
-
-  DbgMsger = DebugMessenger<EnableDebug>{Instance.value()};
+  gEng::PltBuilder B;
+  Instance = B.create<vk::Instance>(DbgMsger);
   return Instance.value();
 }
 
