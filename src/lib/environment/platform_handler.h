@@ -47,7 +47,7 @@ public:
     auto Inst = B.create<vk::Instance>(DbgMsger);
     auto Surface = B.create<vk::SurfaceKHR>(Inst, Window);
     auto PhysDev = B.create<vk::PhysicalDevice>(Inst, Surface);
-    auto Dev = B.create<vk::Device>(Inst, PhysDev);
+    auto Dev = B.create<vk::Device>(Surface, PhysDev);
 
     HandledEntities = std::make_tuple(Inst, Surface, PhysDev, Dev);
   }

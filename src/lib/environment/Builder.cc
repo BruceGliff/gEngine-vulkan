@@ -4,6 +4,7 @@
 #include "debug_callback.h"
 #include "gEng/window.h"
 
+#include <optional>
 #include <set>
 #include <unordered_set>
 
