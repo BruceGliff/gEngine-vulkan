@@ -4,6 +4,7 @@
 #include "debug_callback.h"
 #include "gEng/window.h"
 
+#include <set>
 #include <unordered_set>
 
 #include <vulkan/vulkan.hpp>
@@ -197,4 +198,30 @@ PltBuilder::create<vk::PhysicalDevice>(vk::Instance &Inst,
     throw std::runtime_error("failed to find a suitable GPU!");
 
   return *FindIt;
+}
+
+template <>
+vk::Device PltBuilder::create<vk::Device>(vk::SurfaceKHR &Surface,
+                                          vk::PhysicalDevice &PhysDev) {
+  // TODO rethink about using findQueueFamilieses once.
+  QueueFamilyIndices Indices = findQueueFamilies(Surface, PhysDev);
+
+  // Each queue family has to have own VkDeviceQueueCreateInfo.
+  std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos{};
+  // This is the worst way of doing it. Rethink!
+  std::set<uint32_t> UniqueIdc = {Indices.GraphicsFamily.value(),
+                                  Indices.PresentFamily.value()};
+  // TODO: what is this?
+  std::array<float, 1> const QueuePriority = {1.f};
+  for (uint32_t Family : UniqueIdc)
+    QueueCreateInfos.push_back(
+        vk::DeviceQueueCreateInfo{{}, Family, QueuePriority});
+
+  vk::PhysicalDeviceFeatures DevFeat{};
+  DevFeat.samplerAnisotropy = VK_TRUE;
+  DevFeat.sampleRateShading = VK_TRUE;
+
+  auto constexpr Layers = getValidationLayers<EnableDebug>();
+  return PhysDev.createDevice(
+      {{}, QueueCreateInfos, Layers, DeviceExtensions, &DevFeat});
 }

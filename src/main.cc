@@ -13,7 +13,6 @@
 #include <tiny_obj_loader.h>
 
 // BAD. just a placeholder
-#include "lib/environment/platform_manager.h"
 #include "lib/environment/platform_handler.h"
 
 #include "image/image.h"
@@ -203,19 +202,13 @@ private:
   void initVulkan() {
     // createInstance();
     // setupDebugMessenger();
-    auto &PltMgn = gEng::PltManager::getInstance();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    PltMgn.init(m_Window);
 
-    gEng::PlatformHandler::set(PltMgn.createInstance());
-    gEng::PlatformHandler::set(PltMgn.createSurface(m_Window));
-
-    gEng::PlatformHandler::set(PltMgn.createPhysicalDevice());
-    gEng::PlatformHandler::set(PltMgn.createDevice());
-
-    m_instance = gEng::PlatformHandler::get<vk::Instance>();
-    m_surface = gEng::PlatformHandler::get<vk::SurfaceKHR>();
-
-    m_physicalDevice = gEng::PlatformHandler::get<vk::PhysicalDevice>();
-    m_device = gEng::PlatformHandler::get<vk::Device>();
+    m_instance = PltMgn.get<vk::Instance>();
+    m_surface = PltMgn.get<vk::SurfaceKHR>();
+    m_physicalDevice = PltMgn.get<vk::PhysicalDevice>();
+    m_device = PltMgn.get<vk::Device>();
 
     // pickPhysicalDevice();
     msaaSamples = getMaxUsableSampleCount();
@@ -1135,41 +1128,6 @@ private:
     m_swapchainImages = m_device.getSwapchainImagesKHR(m_swapchain);
   }
 
-  void createLogicalDevice() {
-    // TODO rethink about using findQueueFamilieses once.
-    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
-
-    // Each queue family has to have own VkDeviceQueueCreateInfo.
-    std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos{};
-    // This is the worst way of doing it. Rethink!
-    std::set<uint32_t> UniqueIdc = {Indices.GraphicsFamily.value(),
-                                    Indices.PresentFamily.value()};
-    // TODO: what is this?
-    std::array<float, 1> const QueuePriority = {1.f};
-    for (uint32_t Family : UniqueIdc)
-      QueueCreateInfos.push_back(
-          vk::DeviceQueueCreateInfo{{}, Family, QueuePriority});
-
-    vk::PhysicalDeviceFeatures DevFeat{};
-    DevFeat.samplerAnisotropy = VK_TRUE;
-    DevFeat.sampleRateShading = VK_TRUE;
-
-    // TODO: rethink this approach. May be use smth like std::optional.
-    std::vector<char const *> const &Layers = m_enableValidationLayers
-                                                  ? m_validationLayers
-                                                  : std::vector<char const *>{};
-    m_device = m_physicalDevice.createDevice(
-        {{}, QueueCreateInfos, Layers, m_deviceExtensions, &DevFeat});
-
-    gEng::PlatformHandler::set<vk::Device>(m_device);
-
-    // We can use the vkGetDeviceQueue function to retrieve queue handles for
-    // each queue family. The parameters are the logical device, queue family,
-    // queue index and a pointer to the variable to store the queue handle in.
-    // Because we're only creating a single queue from this family, we'll simply
-    // use index 0.
-  }
-
   void pickPhysicalDevice() {
     std::vector<vk::PhysicalDevice> Devices =
         m_instance.enumeratePhysicalDevices();
@@ -1448,7 +1406,8 @@ private:
 
   uint32_t currentFrame = 0;
   void drawFrame() {
-    vk::Device Dev = gEng::PlatformHandler::get<vk::Device>();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    vk::Device Dev = PltMgn.get<vk::Device>();
 
     if (Dev.waitForFences(m_inFlightFence[currentFrame], VK_TRUE, UINT64_MAX) !=
         vk::Result::eSuccess)
