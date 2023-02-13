@@ -8,12 +8,15 @@
 namespace gEng {
 namespace detail {
 
-struct GraphQ : public vk::Queue {
-  GraphQ(vk::Queue const &Q) : vk::Queue{Q} {}
+enum class QueueType { Graph, Present, None };
+
+template <QueueType QT> struct Queue : vk::Queue {
+  static constexpr QueueType Type = QT;
+  Queue(vk::Queue const &Q) : vk::Queue{Q} {}
 };
-struct PresentQ : public vk::Queue {
-  PresentQ(vk::Queue const &Q) : vk::Queue{Q} {}
-};
+using GraphQ = Queue<QueueType::Graph>;
+using PresentQ = Queue<QueueType::Present>;
+
 using GraphPresentQ = std::pair<GraphQ, PresentQ>;
 inline auto createGPQ(vk::Queue const &G, vk::Queue const &P) {
   return std::make_pair<GraphQ, PresentQ>(G, P);
