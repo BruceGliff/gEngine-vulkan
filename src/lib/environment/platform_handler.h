@@ -1,8 +1,8 @@
 #pragma once
 
 #include "Builder.hpp"
-#include "Types.hpp"
 #include "debug_callback.h"
+#include "detail/Types.hpp"
 
 #include "gEng/utils/singleton.h"
 #include "gEng/window.h"

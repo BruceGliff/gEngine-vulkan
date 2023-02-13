@@ -1,8 +1,9 @@
 #include "Builder.hpp"
 
 #include "../window/glfw_window.h"
-#include "Types.hpp"
 #include "debug_callback.h"
+#include "detail/CommonForPltAndChains.hpp"
+#include "detail/Types.hpp"
 #include "gEng/window.h"
 
 #include <optional>
@@ -46,20 +47,6 @@ checkValidationLayers(std::ranges::range auto const &ValidationLayers) {
                      });
 }
 
-// Checks which queue families are supported by the device and which one of
-// these supports the commands that we want to use.
-struct QueueFamilyIndices final {
-  // optional just because we may be want to select GPU with some family, but
-  // it is not strictly necessary.
-  std::optional<uint32_t> GraphicsFamily{};
-  // Not every device can support presentation of the image, so need to
-  // check that divece has proper family queue.
-  std::optional<uint32_t> PresentFamily{};
-
-  bool isComplete() {
-    return GraphicsFamily.has_value() && PresentFamily.has_value();
-  }
-};
 // Swapchain requires more details to be checked.
 // - basic surface capabilities.
 // - surface format (pixel format, color space).
@@ -95,34 +82,6 @@ static bool checkDeviceExtensionSupport(vk::PhysicalDevice Device) {
                      });
 }
 
-static QueueFamilyIndices findQueueFamilies(vk::SurfaceKHR Surface,
-                                            vk::PhysicalDevice PhysDev) {
-  QueueFamilyIndices Indices;
-  std::vector<vk::QueueFamilyProperties> QueueFamilies =
-      PhysDev.getQueueFamilyProperties();
-
-  // TODO: rething this approach.
-  uint32_t i{0};
-  for (auto &&queueFamily : QueueFamilies) {
-    // For better performance one queue family has to support all requested
-    // queues at once, but we also can treat them as different families for
-    // unified approach.
-    if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
-      Indices.GraphicsFamily = i;
-
-    // Checks for presentation family support.
-    if (PhysDev.getSurfaceSupportKHR(i, Surface))
-      Indices.PresentFamily = i;
-
-    // Not quite sure why the hell we need this early-break.
-    if (Indices.isComplete())
-      return Indices;
-    ++i;
-  }
-
-  return QueueFamilyIndices{};
-}
-
 // Checks if device is suitable for our extensions and purposes.
 static bool isDeviceSuitable(vk::SurfaceKHR Surface,
                              vk::PhysicalDevice Device) {
@@ -147,7 +106,7 @@ static bool isDeviceSuitable(vk::SurfaceKHR Surface,
   };
 
   // But we want to find out if GPU is graphicFamily. (?)
-  return findQueueFamilies(Surface, Device).isComplete() &&
+  return detail::findQueueFamilies(Surface, Device).isComplete() &&
          checkDeviceExtensionSupport(Device) &&
          swapchainSupport(querySwapchainSupport(Surface, Device)) &&
          DeviceFeat.samplerAnisotropy;
@@ -206,7 +165,7 @@ template <>
 vk::Device PltBuilder::create<vk::Device>(vk::SurfaceKHR &Surface,
                                           vk::PhysicalDevice &PhysDev) {
   // TODO rethink about using findQueueFamilieses once.
-  QueueFamilyIndices Indices = findQueueFamilies(Surface, PhysDev);
+  auto Indices = detail::findQueueFamilies(Surface, PhysDev);
 
   // Each queue family has to have own VkDeviceQueueCreateInfo.
   std::vector<vk::DeviceQueueCreateInfo> QueueCreateInfos{};
@@ -231,7 +190,7 @@ vk::Device PltBuilder::create<vk::Device>(vk::SurfaceKHR &Surface,
 template <>
 gEng::detail::GraphPresentQ PltBuilder::create<gEng::detail::GraphPresentQ>(
     vk::SurfaceKHR &Surface, vk::PhysicalDevice &PhysDev, vk::Device &Dev) {
-  QueueFamilyIndices Indices = findQueueFamilies(Surface, PhysDev);
+  auto Indices = detail::findQueueFamilies(Surface, PhysDev);
   vk::Queue Gr = Dev.getQueue(Indices.GraphicsFamily.value(), 0);
   vk::Queue Pr = Dev.getQueue(Indices.PresentFamily.value(), 0);
   return gEng::detail::createGPQ(Gr, Pr);

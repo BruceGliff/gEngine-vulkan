@@ -218,8 +218,10 @@ private:
         PltMgn.get<gEng::detail::GraphPresentQ>();
 
     Chains.init(PltMgn);
+    m_swapchain = Chains.getSwapchain();
+    m_swapchainImages = Chains.getImages();
+    // createSwapchain();
 
-    createSwapchain();
     createImageViews();
     createRenderPass();
     createDescriptorSetLayout();
