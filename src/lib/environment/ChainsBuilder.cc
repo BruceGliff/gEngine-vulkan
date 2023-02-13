@@ -7,15 +7,16 @@ using namespace gEng;
 
 template <> vk::SwapchainKHR create(PlatformHandler &PltMgr) {
   auto PhysDev = PltMgr.get<vk::PhysicalDevice>();
+  auto Dev = PltMgr.get<vk::Device>();
+  auto Surface = PltMgr.get<vk::SurfaceKHR>();
 
-  SwapchainSupportDetails SwapchainSupport =
-      querySwapchainSupport(m_physicalDevice);
+  SwapchainSupportDetails SwapchainSupport = querySwapchainSupport(PhysDev);
 
   vk::SurfaceFormatKHR SurfFmt =
       chooseSwapSurfaceFormat(SwapchainSupport.formats);
   vk::PresentModeKHR PresentMode =
       chooseSwapPresentMode(SwapchainSupport.presentModes);
-  m_swapchainExtent = chooseSwapExtent(SwapchainSupport.capabilities);
+  vk::Extent2D Extent = chooseSwapExtent(SwapchainSupport.capabilities);
 
   // min images count in swap chain(plus one).
   uint32_t ImageCount = SwapchainSupport.capabilities.minImageCount + 1;
@@ -24,7 +25,7 @@ template <> vk::SwapchainKHR create(PlatformHandler &PltMgr) {
       ImageCount > SwapchainSupport.capabilities.maxImageCount)
     ImageCount = SwapchainSupport.capabilities.maxImageCount;
 
-  QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
+  QueueFamilyIndices Indices = findQueueFamilies(PhysDev);
   bool const IsFamiliesSame = Indices.GraphicsFamily == Indices.PresentFamily;
   // Next, we need to specify how to handle swap chain images that will be
   // used across multiple queue families.
@@ -35,14 +36,13 @@ template <> vk::SwapchainKHR create(PlatformHandler &PltMgr) {
   vk::SharingMode SMode = !IsFamiliesSame ? vk::SharingMode::eConcurrent
                                           : vk::SharingMode::eExclusive;
 
-  m_swapchainImageFormat = SurfFmt.format;
   vk::SwapchainCreateInfoKHR const CreateInfo{
       {},
-      m_surface,
+      Surface,
       ImageCount,
-      m_swapchainImageFormat,
+      SurfFmt.format,
       SurfFmt.colorSpace,
-      m_swapchainExtent,
+      Extent,
       1,
       vk::ImageUsageFlagBits::eColorAttachment,
       SMode,
@@ -52,6 +52,11 @@ template <> vk::SwapchainKHR create(PlatformHandler &PltMgr) {
       PresentMode,
       VK_TRUE};
 
-  m_swapchain = m_device.createSwapchainKHR(CreateInfo);
+  return Dev.createSwapchainKHR(CreateInfo);
+}
+
+template <>
+Swapchains create(PlatformHandler &PltMgr, vk::SwapchainKHR &Swapchain) {
+
   m_swapchainImages = m_device.getSwapchainImagesKHR(m_swapchain);
 }
