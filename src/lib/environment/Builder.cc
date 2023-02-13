@@ -1,6 +1,7 @@
 #include "Builder.hpp"
 
 #include "../window/glfw_window.h"
+#include "Types.hpp"
 #include "debug_callback.h"
 #include "gEng/window.h"
 
@@ -225,4 +226,13 @@ vk::Device PltBuilder::create<vk::Device>(vk::SurfaceKHR &Surface,
   auto constexpr Layers = getValidationLayers<EnableDebug>();
   return PhysDev.createDevice(
       {{}, QueueCreateInfos, Layers, DeviceExtensions, &DevFeat});
+}
+
+template <>
+gEng::detail::GraphPresentQ PltBuilder::create<gEng::detail::GraphPresentQ>(
+    vk::SurfaceKHR &Surface, vk::PhysicalDevice &PhysDev, vk::Device &Dev) {
+  QueueFamilyIndices Indices = findQueueFamilies(Surface, PhysDev);
+  vk::Queue Gr = Dev.getQueue(Indices.GraphicsFamily.value(), 0);
+  vk::Queue Pr = Dev.getQueue(Indices.PresentFamily.value(), 0);
+  return gEng::detail::createGPQ(Gr, Pr);
 }

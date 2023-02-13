@@ -212,10 +212,9 @@ private:
 
     // pickPhysicalDevice();
     msaaSamples = getMaxUsableSampleCount();
-    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
-    m_graphicsQueue = m_device.getQueue(Indices.GraphicsFamily.value(), 0);
-    m_presentQueue = m_device.getQueue(Indices.PresentFamily.value(), 0);
-    // createLogicalDevice();
+    std::tie(m_graphicsQueue, m_presentQueue) =
+        PltMgn.get<gEng::detail::GraphPresentQ>();
+
     createSwapchain();
     createImageViews();
     createRenderPass();

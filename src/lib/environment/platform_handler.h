@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Builder.hpp"
+#include "Types.hpp"
 #include "debug_callback.h"
 
 #include "gEng/utils/singleton.h"
@@ -30,13 +31,11 @@ class PlatformHandler final : public singleton<PlatformHandler> {
 
   template <typename... Tys> using PackedTys = std::tuple<Optional<Tys>...>;
 
-  using Collection =
-      PackedTys<vk::Instance, vk::SurfaceKHR, vk::PhysicalDevice, vk::Device>;
+  // Queue automatically created with logical device, but we need to create a
+  // handles. And queues automatically destroyed within device.
+  using Collection = PackedTys<vk::Instance, vk::SurfaceKHR, vk::PhysicalDevice,
+                               vk::Device, gEng::detail::GraphPresentQ>;
   Collection HandledEntities;
-
-  template <typename T> static std::type_index getTypeIndex() {
-    return std::type_index(typeid(T));
-  }
 
   template <typename T, typename Cnt> static auto &get(Cnt &&C) {
     return std::get<std::optional<T>>(C);
@@ -48,8 +47,9 @@ public:
     auto Surface = B.create<vk::SurfaceKHR>(Inst, Window);
     auto PhysDev = B.create<vk::PhysicalDevice>(Inst, Surface);
     auto Dev = B.create<vk::Device>(Surface, PhysDev);
+    auto GPQ = B.create<gEng::detail::GraphPresentQ>(Surface, PhysDev, Dev);
 
-    HandledEntities = std::make_tuple(Inst, Surface, PhysDev, Dev);
+    HandledEntities = std::make_tuple(Inst, Surface, PhysDev, Dev, GPQ);
   }
 
   // Getting vk-handle from global access.
