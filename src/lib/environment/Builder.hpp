@@ -22,4 +22,13 @@ struct PltBuilder : BuilderInterface<PltBuilder> {
 #endif
 };
 
+// Forward declaration.
+class PlatformHandler;
+struct ChainsBuilder : BuilderInterface<ChainsBuilder> {
+  friend BuilderInterface<ChainsBuilder>;
+
+  template <typename T, typename... Args>
+  T create(PlatformHandler const &Plt, Args &&...args);
+};
+
 } // namespace gEng

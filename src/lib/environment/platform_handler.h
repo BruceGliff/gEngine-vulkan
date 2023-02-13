@@ -54,7 +54,7 @@ public:
 
   // Getting vk-handle from global access.
   // vk::HandleType Handle = gEng::PlatformHandler::get<vk::HandleType>();
-  template <typename T> T get() {
+  template <typename T> T get() const {
     auto &Ent = get<T>(HandledEntities);
     if (Ent)
       return Ent.value();
