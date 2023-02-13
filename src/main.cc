@@ -13,6 +13,7 @@
 #include <tiny_obj_loader.h>
 
 // BAD. just a placeholder
+#include "lib/environment/ChainsManager.h"
 #include "lib/environment/platform_handler.h"
 
 #include "image/image.h"
@@ -121,9 +122,10 @@ class HelloTriangleApplication : gEng::UserWindow {
   // platform-specific structures by itself.
   vk::SurfaceKHR m_surface{};
 
+  gEng::ChainsManager Chains{};
   vk::SwapchainKHR m_swapchain{};
-
   std::vector<vk::Image> m_swapchainImages;
+
   vk::Format m_swapchainImageFormat;
   vk::Extent2D m_swapchainExtent;
   // ImageView used to specify how to treat VkImage.
@@ -214,6 +216,8 @@ private:
     msaaSamples = getMaxUsableSampleCount();
     std::tie(m_graphicsQueue, m_presentQueue) =
         PltMgn.get<gEng::detail::GraphPresentQ>();
+
+    Chains.init(PltMgn);
 
     createSwapchain();
     createImageViews();
