@@ -47,26 +47,6 @@ checkValidationLayers(std::ranges::range auto const &ValidationLayers) {
                      });
 }
 
-// Swapchain requires more details to be checked.
-// - basic surface capabilities.
-// - surface format (pixel format, color space).
-// - available presentation mode.
-struct SwapchainSupportDetails final {
-  vk::SurfaceCapabilitiesKHR capabilities;
-  std::vector<vk::SurfaceFormatKHR> formats;
-  std::vector<vk::PresentModeKHR> presentModes;
-};
-
-// TODO maybe everything regarding swapchain move to another module.
-// This section covers how to query the structs that include this information.
-static SwapchainSupportDetails
-querySwapchainSupport(vk::SurfaceKHR Surface, vk::PhysicalDevice Device) {
-  return SwapchainSupportDetails{
-      .capabilities = Device.getSurfaceCapabilitiesKHR(Surface),
-      .formats = Device.getSurfaceFormatsKHR(Surface),
-      .presentModes = Device.getSurfacePresentModesKHR(Surface)};
-}
-
 static bool checkDeviceExtensionSupport(vk::PhysicalDevice Device) {
   // Some bad code. Rethink!
   std::vector<vk::ExtensionProperties> AvailableExtensions =
@@ -100,7 +80,7 @@ static bool isDeviceSuitable(vk::SurfaceKHR Surface,
   // Swap chain support is sufficient for this tutorial if there is at least
   // one supported image format and one supported presentation mode given
   // the window surface we have.
-  auto swapchainSupport = [](SwapchainSupportDetails swapchainDetails) {
+  auto swapchainSupport = [](detail::SwapchainSupportDetails swapchainDetails) {
     return !swapchainDetails.formats.empty() &&
            !swapchainDetails.presentModes.empty();
   };
@@ -108,7 +88,7 @@ static bool isDeviceSuitable(vk::SurfaceKHR Surface,
   // But we want to find out if GPU is graphicFamily. (?)
   return detail::findQueueFamilies(Surface, Device).isComplete() &&
          checkDeviceExtensionSupport(Device) &&
-         swapchainSupport(querySwapchainSupport(Surface, Device)) &&
+         swapchainSupport(detail::querySwapchainSupport(Surface, Device)) &&
          DeviceFeat.samplerAnisotropy;
   // All three ckecks are different. WTF!
 }

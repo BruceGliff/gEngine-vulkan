@@ -2,6 +2,8 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include <vector>
+
 /// This aggregation of classes is to combine some vk::Handles in one boundle.
 ///
 
@@ -21,6 +23,11 @@ using GraphPresentQ = std::pair<GraphQ, PresentQ>;
 inline auto createGPQ(vk::Queue const &G, vk::Queue const &P) {
   return std::make_pair<GraphQ, PresentQ>(G, P);
 }
+
+struct Swapchains final {
+  std::vector<vk::Image> Img{};
+  std::vector<vk::ImageView> ImgView{};
+};
 
 } // namespace detail
 } // namespace gEng

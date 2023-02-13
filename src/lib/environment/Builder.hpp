@@ -1,5 +1,7 @@
 #pragma once
 
+#include <vulkan/vulkan.hpp>
+
 namespace gEng {
 
 template <typename Impl> struct BuilderInterface {
@@ -26,6 +28,8 @@ struct PltBuilder : BuilderInterface<PltBuilder> {
 class PlatformHandler;
 struct ChainsBuilder : BuilderInterface<ChainsBuilder> {
   friend BuilderInterface<ChainsBuilder>;
+  vk::Format Fmt{};
+  vk::Extent2D Ext{};
 
   template <typename T, typename... Args>
   T create(PlatformHandler const &Plt, Args &&...args);

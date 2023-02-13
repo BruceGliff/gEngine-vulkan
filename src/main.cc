@@ -217,12 +217,13 @@ private:
     std::tie(m_graphicsQueue, m_presentQueue) =
         PltMgn.get<gEng::detail::GraphPresentQ>();
 
-    Chains.init(PltMgn);
+    Chains.init(PltMgn, m_Window);
     m_swapchain = Chains.getSwapchain();
     m_swapchainImages = Chains.getImages();
-    // createSwapchain();
+    m_swapchainImageFormat = Chains.getFormat();
+    m_swapchainImageViews = Chains.getImageViews();
+    m_swapchainExtent = Chains.getExtent();
 
-    createImageViews();
     createRenderPass();
     createDescriptorSetLayout();
     createGraphicPipeline();
