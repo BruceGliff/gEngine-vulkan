@@ -60,6 +60,33 @@ chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &Capabilities,
 }
 
 template <>
+vk::SampleCountFlagBits
+ChainsBuilder::create<vk::SampleCountFlagBits>(PlatformHandler const &PltMgr) {
+  using SC = vk::SampleCountFlagBits;
+  auto PhysDev = PltMgr.get<vk::PhysicalDevice>();
+  vk::PhysicalDeviceProperties DevProps = PhysDev.getProperties();
+
+  vk::SampleCountFlags Counts = DevProps.limits.framebufferColorSampleCounts &
+                                DevProps.limits.framebufferDepthSampleCounts;
+  SC FlagBits = SC::e1;
+
+  if (Counts & SC::e64)
+    FlagBits = SC::e64;
+  else if (Counts & SC::e32)
+    FlagBits = SC::e32;
+  else if (Counts & SC::e16)
+    FlagBits = SC::e16;
+  else if (Counts & SC::e8)
+    FlagBits = SC::e8;
+  else if (Counts & SC::e4)
+    FlagBits = SC::e4;
+  else if (Counts & SC::e2)
+    FlagBits = SC::e2;
+
+  return FlagBits;
+}
+
+template <>
 vk::SwapchainKHR
 ChainsBuilder::create<vk::SwapchainKHR>(PlatformHandler const &PltMgr,
                                         Window const &W) {
@@ -132,4 +159,93 @@ ChainsBuilder::create<detail::Swapchains>(PlatformHandler const &PltMgr,
                         {vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1}});
                  });
   return detail::Swapchains{Imgs, ImgViews};
+}
+
+// Takes a lists of candidate formats from most desireable to the least
+// desirable and checks the first one is supported.
+static vk::Format findSupportedFormat(vk::PhysicalDevice const &PhysDev,
+                                      std::vector<vk::Format> const &Candidates,
+                                      vk::ImageTiling Tiling,
+                                      vk::FormatFeatureFlags Feats) {
+  for (vk::Format const &Format : Candidates) {
+    vk::FormatProperties Props = PhysDev.getFormatProperties(Format);
+    if (Tiling == vk::ImageTiling::eLinear &&
+        (Props.linearTilingFeatures & Feats) == Feats)
+      return Format;
+    else if (Tiling == vk::ImageTiling::eOptimal &&
+             (Props.optimalTilingFeatures & Feats) == Feats)
+      return Format;
+  }
+
+  throw std::runtime_error("failed to find supported format!");
+}
+static vk::Format findDepthFormat(vk::PhysicalDevice const &PhysDev) {
+  using F = vk::Format;
+  return findSupportedFormat(
+      PhysDev, {F::eD32Sfloat, F::eD32SfloatS8Uint, F::eD24UnormS8Uint},
+      vk::ImageTiling::eOptimal,
+      vk::FormatFeatureFlagBits::eDepthStencilAttachment);
+}
+template <>
+vk::RenderPass
+ChainsBuilder::create<vk::RenderPass>(PlatformHandler const &PltMgr,
+                                      vk::SampleCountFlagBits &msaa) {
+  auto PhysDev = PltMgr.get<vk::PhysicalDevice>();
+  vk::AttachmentDescription DepthAtt{
+      {},
+      findDepthFormat(PhysDev),
+      msaa,
+      vk::AttachmentLoadOp::eClear,
+      vk::AttachmentStoreOp::eDontCare,
+      vk::AttachmentLoadOp::eDontCare,
+      vk::AttachmentStoreOp::eDontCare,
+      vk::ImageLayout::eUndefined,
+      vk::ImageLayout::eDepthStencilAttachmentOptimal};
+  vk::AttachmentReference DepthAttRef{
+      1, vk::ImageLayout::eDepthStencilAttachmentOptimal};
+
+  vk::AttachmentDescription ColorAtt{{},
+                                     Fmt,
+                                     msaa,
+                                     vk::AttachmentLoadOp::eClear,
+                                     vk::AttachmentStoreOp::eStore,
+                                     vk::AttachmentLoadOp::eDontCare,
+                                     vk::AttachmentStoreOp::eDontCare,
+                                     vk::ImageLayout::eUndefined,
+                                     vk::ImageLayout::eColorAttachmentOptimal};
+  vk::AttachmentReference ColorAttRef{0,
+                                      vk::ImageLayout::eColorAttachmentOptimal};
+
+  vk::AttachmentDescription ColorAttResolve{{},
+                                            Fmt,
+                                            vk::SampleCountFlagBits::e1,
+                                            vk::AttachmentLoadOp::eDontCare,
+                                            vk::AttachmentStoreOp::eStore,
+                                            vk::AttachmentLoadOp::eDontCare,
+                                            vk::AttachmentStoreOp::eDontCare,
+                                            vk::ImageLayout::eUndefined,
+                                            vk::ImageLayout::ePresentSrcKHR};
+  vk::AttachmentReference ColorAttResolveRef{
+      2, vk::ImageLayout::eColorAttachmentOptimal};
+
+  // TODO: empty input attachments(3rd operand).
+  vk::SubpassDescription Subpass{{},
+                                 vk::PipelineBindPoint::eGraphics,
+                                 {},
+                                 ColorAttRef,
+                                 ColorAttResolveRef,
+                                 &DepthAttRef};
+
+  using Fbits = vk::PipelineStageFlagBits;
+  vk::SubpassDependency Dependency{
+      VK_SUBPASS_EXTERNAL, 0,
+      Fbits::eColorAttachmentOutput | Fbits::eEarlyFragmentTests,
+      Fbits::eColorAttachmentOutput | Fbits::eEarlyFragmentTests,
+      vk::AccessFlagBits::eColorAttachmentWrite |
+          vk::AccessFlagBits::eDepthStencilAttachmentWrite};
+
+  std::array<vk::AttachmentDescription, 3> Attachments{ColorAtt, DepthAtt,
+                                                       ColorAttResolve};
+  return PltMgr.get<vk::Device>().createRenderPass(
+      {{}, Attachments, Subpass, Dependency});
 }

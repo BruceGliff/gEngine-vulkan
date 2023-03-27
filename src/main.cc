@@ -223,8 +223,9 @@ private:
     m_swapchainImageFormat = Chains.getFormat();
     m_swapchainImageViews = Chains.getImageViews();
     m_swapchainExtent = Chains.getExtent();
+    m_renderPass = Chains.getRPass();
+    msaaSamples = Chains.getMSAA();
 
-    createRenderPass();
     createDescriptorSetLayout();
     createGraphicPipeline();
     createCommandPool();
