@@ -22,6 +22,7 @@
 
 #include "gEng/environment.h"
 #include "gEng/global.h"
+#include "gEng/image.h"
 #include "gEng/window.h"
 
 #include <algorithm>
@@ -233,7 +234,12 @@ private:
     createColorResources();
     createDepthResources();
     createFramebuffers();
-    createTextureImage();
+
+    fs::path ImagePath{EH};
+    ImagePath /= "assets/textures/viking_room.png";
+    gEng::Image Img(ImagePath.generic_string());
+    gEng::setImg(textureImage, textureImageMemory, mipLevels, Img);
+    // createTextureImage();
     createTextureImageView();
     createTextureSampler();
     loadModel();

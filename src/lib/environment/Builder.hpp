@@ -2,16 +2,9 @@
 
 #include <vulkan/vulkan.hpp>
 
+#include "../utils/BuilderInterface.hpp"
+
 namespace gEng {
-
-template <typename Impl> struct BuilderInterface {
-  template <typename T, typename... Args> T create() {
-    return impl()->create();
-  }
-
-private:
-  Impl *impl() { return static_cast<Impl *>(this); }
-};
 
 struct PltBuilder : BuilderInterface<PltBuilder> {
   friend BuilderInterface<PltBuilder>;
@@ -30,6 +23,7 @@ struct ChainsBuilder : BuilderInterface<ChainsBuilder> {
   friend BuilderInterface<ChainsBuilder>;
   vk::Format Fmt{};
   vk::Extent2D Ext{};
+  // TODO why do not put Plt as member?
 
   template <typename T, typename... Args>
   T create(PlatformHandler const &Plt, Args &&...args);
