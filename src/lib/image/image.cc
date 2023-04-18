@@ -185,11 +185,13 @@ struct ImageBuilder : BuilderInterface<ImageBuilder> {
   template <typename T, typename... Args> T create(Args... args);
 };
 
+// FIXME use commit history to find previous (non-working) impl.
+// and try to fix it.
 template <>
 ImageBuilder::Type ImageBuilder::create<ImageBuilder::Type>(
     uint32_t Width, uint32_t Height, uint32_t MipLevls,
     vk::SampleCountFlagBits NumSample, vk::Format Fmt, vk::ImageTiling Tiling,
-    vk::ImageUsageFlags Usage, vk::MemoryPropertyFlags Props) {
+    vk::Flags<vk::ImageUsageFlagBits> Usage, vk::MemoryPropertyFlagBits Props) {
   vk::ImageCreateInfo ImageInfo{{},        vk::ImageType::e2D,
                                 Fmt,       {Width, Height, 1},
                                 MipLevls,  1,

@@ -15,11 +15,12 @@ uint32_t findMemoryType(vk::PhysicalDevice PhysDev, uint32_t TypeFilter,
   throw std::runtime_error("failed to find suitable memory type!");
 }
 
+// FIXME use commit history to find previous (non-working) impl.
+// and try to fix it.
 template <>
-BufferBuilder::Type
-BufferBuilder::create<BufferBuilder::Type>(vk::DeviceSize Size,
-                                           vk::BufferUsageFlags Usage,
-                                           vk::MemoryPropertyFlags Properties) {
+BufferBuilder::Type BufferBuilder::create<BufferBuilder::Type>(
+    vk::DeviceSize Size, vk::BufferUsageFlagBits Usage,
+    vk::Flags<vk::MemoryPropertyFlagBits> Properties) {
   // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
   // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
   // queue family specially with TRANSFER_BIT.
