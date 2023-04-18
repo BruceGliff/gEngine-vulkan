@@ -228,7 +228,8 @@ private:
 
     createDescriptorSetLayout();
     createGraphicPipeline();
-    createCommandPool();
+    m_commandPool = PltMgn.get<vk::CommandPool>();
+    // createCommandPool();
     createColorResources();
     createDepthResources();
     createFramebuffers();
@@ -408,7 +409,8 @@ private:
   void transitionImageLayout(vk::Image Image, vk::Format Fmt,
                              vk::ImageLayout OldLayout,
                              vk::ImageLayout NewLayout, uint32_t MipLvls) {
-    vk::CommandBuffer CmdBuffer = beginSingleTimeCommands();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    auto [SSTC, CmdBuffer] = PltMgn.getSSTC();
 
     vk::ImageMemoryBarrier Barrier{
         {}, {}, OldLayout, NewLayout,
@@ -453,12 +455,12 @@ private:
     CmdBuffer.pipelineBarrier(SrcStage, DstStage, {}, nullptr, nullptr,
                               Barrier);
 
-    endSingleTimeCommands(CmdBuffer);
   }
 
   void copyBufferToImage(vk::Buffer Buffer, vk::Image Image, uint32_t Width,
                          uint32_t Height) {
-    vk::CommandBuffer CmdBuff = beginSingleTimeCommands();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    auto [SSTC, CmdBuff] = PltMgn.getSSTC();
 
     vk::BufferImageCopy Reg{
         0,         0,
@@ -467,7 +469,6 @@ private:
     CmdBuff.copyBufferToImage(Buffer, Image,
                               vk::ImageLayout::eTransferDstOptimal, Reg);
 
-    endSingleTimeCommands(CmdBuff);
   }
 
   void generateMipmaps(vk::Image Img, vk::Format Fmt, uint32_t Width,
@@ -480,7 +481,8 @@ private:
       throw std::runtime_error(
           "texture image format does not support linear blitting!");
 
-    vk::CommandBuffer CmdBuff = beginSingleTimeCommands();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    auto [SSTC, CmdBuff] = PltMgn.getSSTC();
 
     vk::ImageMemoryBarrier Barrier{
         {},  {},
@@ -536,8 +538,6 @@ private:
     CmdBuff.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
                             vk::PipelineStageFlagBits::eFragmentShader, {},
                             nullptr, nullptr, Barrier);
-
-    endSingleTimeCommands(CmdBuff);
   }
 
   void createTextureImage() {
@@ -599,25 +599,6 @@ private:
     m_device.bindImageMemory(Image, ImageMem, 0);
 
     return {Image, ImageMem};
-  }
-
-  vk::CommandBuffer beginSingleTimeCommands() {
-    // allocateCommandBuffers returns a vector.
-    auto CmdBuff = m_device
-                       .allocateCommandBuffers(
-                           {m_commandPool, vk::CommandBufferLevel::ePrimary, 1})
-                       .front();
-    CmdBuff.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
-    return CmdBuff;
-  }
-
-  void endSingleTimeCommands(vk::CommandBuffer CmdBuff) {
-    CmdBuff.end();
-
-    m_graphicsQueue.submit(vk::SubmitInfo{}.setCommandBuffers(CmdBuff));
-    m_graphicsQueue.waitIdle();
-
-    m_device.freeCommandBuffers(m_commandPool, CmdBuff);
   }
 
   void createDescriptorSets() {
@@ -744,9 +725,9 @@ private:
     // short-lived buffers, because the implementation may be able to apply
     // memory allocation optimizations. VK_COMMAND_POOL_CREATE_TRANSIENT_BIT for
     // commandPool generation in that case.
-    vk::CommandBuffer CmdBuff = beginSingleTimeCommands();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    auto [SSTC, CmdBuff] = PltMgn.getSSTC();
     CmdBuff.copyBuffer(Src, Dst, vk::BufferCopy{{}, {}, Size});
-    endSingleTimeCommands(CmdBuff);
   }
 
   // Creates new swap chain when smth goes wrong or resizing.

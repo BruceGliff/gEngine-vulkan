@@ -175,3 +175,13 @@ gEng::detail::GraphPresentQ PltBuilder::create<gEng::detail::GraphPresentQ>(
   vk::Queue Pr = Dev.getQueue(Indices.PresentFamily.value(), 0);
   return gEng::detail::createGPQ(Gr, Pr);
 }
+
+template <>
+vk::CommandPool PltBuilder::create<vk::CommandPool>(vk::SurfaceKHR &Surface,
+                                                    vk::PhysicalDevice &PhysDev,
+                                                    vk::Device &Dev) {
+  auto Indices = detail::findQueueFamilies(Surface, PhysDev);
+  return Dev.createCommandPool(
+      {vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
+       Indices.GraphicsFamily.value()});
+}
