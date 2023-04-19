@@ -6,6 +6,8 @@
 namespace vk {
 class Image;
 class DeviceMemory;
+class ImageView;
+class Sampler;
 } // namespace vk
 
 namespace gEng {
@@ -22,6 +24,7 @@ public:
   ~Image();
 };
 
-void setImg(vk::Image &, vk::DeviceMemory &, uint32_t &, Image &);
+void setImg(vk::Image &I, vk::DeviceMemory &M, uint32_t &L, vk::ImageView &IW,
+            vk::Sampler &S, Image &Img);
 
 } // namespace gEng

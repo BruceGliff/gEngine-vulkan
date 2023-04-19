@@ -212,6 +212,9 @@ class ImageImpl final {
 public:
   vk::Image Img;
   vk::DeviceMemory Mem;
+
+  vk::ImageView ImgView;
+  vk::Sampler ImgSampler;
   uint32_t mipLevels;
 
 public:
@@ -245,6 +248,7 @@ public:
         vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
         IU::eTransferSrc | IU::eTransferDst | IU::eSampled, MP::eDeviceLocal);
 
+    // TODO move it to builder!
     transitionImageLayout(PltMgn, Img, vk::Format::eR8G8B8A8Srgb,
                           vk::ImageLayout::eUndefined,
                           vk::ImageLayout::eTransferDstOptimal, MIPlvl);
@@ -256,13 +260,45 @@ public:
 
     Dev.destroyBuffer(StagingBuff);
     Dev.freeMemory(StagingBuffMem);
+
+    // FIXME move it to builder!
+    // createTextureImageView();
+    ImgView = Dev.createImageView(
+        {{},
+         Img,
+         vk::ImageViewType::e2D,
+         vk::Format::eR8G8B8A8Srgb,
+         {},
+         {vk::ImageAspectFlagBits::eColor, 0, MIPlvl, 0, 1}});
+
+    // createTextureSampler();
+    vk::PhysicalDeviceProperties Props = PhysDev.getProperties();
+    ImgSampler = Dev.createSampler({{},
+                                    vk::Filter::eNearest,
+                                    vk::Filter::eLinear,
+                                    vk::SamplerMipmapMode::eLinear,
+                                    vk::SamplerAddressMode::eRepeat,
+                                    vk::SamplerAddressMode::eRepeat,
+                                    vk::SamplerAddressMode::eRepeat,
+                                    0.f,
+                                    VK_TRUE,
+                                    Props.limits.maxSamplerAnisotropy,
+                                    VK_FALSE,
+                                    vk::CompareOp::eAlways,
+                                    0.f,
+                                    static_cast<float>(MIPlvl),
+                                    vk::BorderColor::eIntOpaqueBlack,
+                                    VK_FALSE});
   }
 };
 
-void setImg(vk::Image &I, vk::DeviceMemory &M, uint32_t &L, Image &Img) {
+void setImg(vk::Image &I, vk::DeviceMemory &M, uint32_t &L, vk::ImageView &IW,
+            vk::Sampler &S, Image &Img) {
   I = Img.ImageVk->Img;
   M = Img.ImageVk->Mem;
   L = Img.ImageVk->mipLevels;
+  IW = Img.ImageVk->ImgView;
+  S = Img.ImageVk->ImgSampler;
 }
 
 Image::Image(std::string_view Path) {

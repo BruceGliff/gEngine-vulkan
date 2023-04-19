@@ -238,10 +238,8 @@ private:
     fs::path ImagePath{EH};
     ImagePath /= "assets/textures/viking_room.png";
     gEng::Image Img(ImagePath.generic_string());
-    gEng::setImg(textureImage, textureImageMemory, mipLevels, Img);
-    // createTextureImage();
-    createTextureImageView();
-    createTextureSampler();
+    gEng::setImg(textureImage, textureImageMemory, mipLevels, textureImageView,
+                 textureSampler, Img);
     loadModel();
     createVertexBuffer();
     createIndexBuffer();
@@ -323,6 +321,7 @@ private:
       }
   }
 
+  // TODO combine with image.cc ImageBuilder
   void createDepthResources() {
     vk::Format DepthFmt = findDepthFormat();
 
@@ -371,28 +370,6 @@ private:
     throw std::runtime_error("failed to find supported format!");
   }
 
-  void createTextureSampler() {
-    // TODO retrieve properties once in program
-    vk::PhysicalDeviceProperties Props = m_physicalDevice.getProperties();
-
-    textureSampler = m_device.createSampler({{},
-                                             vk::Filter::eNearest,
-                                             vk::Filter::eLinear,
-                                             vk::SamplerMipmapMode::eLinear,
-                                             vk::SamplerAddressMode::eRepeat,
-                                             vk::SamplerAddressMode::eRepeat,
-                                             vk::SamplerAddressMode::eRepeat,
-                                             0.f,
-                                             VK_TRUE,
-                                             Props.limits.maxSamplerAnisotropy,
-                                             VK_FALSE,
-                                             vk::CompareOp::eAlways,
-                                             0.f,
-                                             static_cast<float>(mipLevels),
-                                             vk::BorderColor::eIntOpaqueBlack,
-                                             VK_FALSE});
-  }
-
   vk::ImageView createImageView(vk::Image const &Image,
                                 vk::Format const &Format,
                                 vk::ImageAspectFlags AspectFlags,
@@ -404,12 +381,6 @@ private:
                                      Format,
                                      {},
                                      {AspectFlags, 0, MipLevels, 0, 1}});
-  }
-
-  void createTextureImageView() {
-    textureImageView =
-        createImageView(textureImage, vk::Format::eR8G8B8A8Srgb,
-                        vk::ImageAspectFlagBits::eColor, mipLevels);
   }
 
   void transitionImageLayout(vk::Image Image, vk::Format Fmt,
@@ -544,47 +515,6 @@ private:
     CmdBuff.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
                             vk::PipelineStageFlagBits::eFragmentShader, {},
                             nullptr, nullptr, Barrier);
-  }
-
-  void createTextureImage() {
-    fs::path ImagePath{EH};
-    ImagePath /= "assets/textures/viking_room.png";
-    image Image(ImagePath.generic_string());
-
-    uint32_t const ImageSize = Image.getSize();
-    uint32_t const Width = Image.getWidth();
-    uint32_t const Height = Image.getHeight();
-    mipLevels =
-        static_cast<uint32_t>(std::floor(std::log2(std::max(Width, Height)))) +
-        1;
-
-    auto [StagingBuff, StagingBuffMem] =
-        createBuffer(ImageSize, vk::BufferUsageFlagBits::eTransferSrc,
-                     vk::MemoryPropertyFlagBits::eHostVisible |
-                         vk::MemoryPropertyFlagBits::eHostCoherent);
-
-    void *Data = m_device.mapMemory(StagingBuffMem, 0, ImageSize);
-    memcpy(Data, Image.getRawData(), ImageSize);
-    m_device.unmapMemory(StagingBuffMem);
-
-    std::tie(textureImage, textureImageMemory) =
-        createImage(Width, Height, mipLevels, vk::SampleCountFlagBits::e1,
-                    vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-                    vk::ImageUsageFlagBits::eTransferSrc |
-                        vk::ImageUsageFlagBits::eTransferDst |
-                        vk::ImageUsageFlagBits::eSampled,
-                    vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    transitionImageLayout(textureImage, vk::Format::eR8G8B8A8Srgb,
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eTransferDstOptimal, mipLevels);
-    copyBufferToImage(StagingBuff, textureImage, Width, Height);
-    // Transitioning to SHADER_READ_ONLY while generating mipmaps.
-    generateMipmaps(textureImage, vk::Format::eR8G8B8A8Srgb, Width, Height,
-                    mipLevels);
-
-    m_device.destroyBuffer(StagingBuff);
-    m_device.freeMemory(StagingBuffMem);
   }
 
   std::pair<vk::Image, vk::DeviceMemory>
