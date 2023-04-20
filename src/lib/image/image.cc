@@ -13,11 +13,6 @@
 
 namespace gEng {
 
-static bool hasStencilComponent(vk::Format Fmt) {
-  return Fmt == vk::Format::eD32SfloatS8Uint ||
-         Fmt == vk::Format::eD24UnormS8Uint;
-}
-
 static std::tuple<void *, uint32_t, uint32_t, uint32_t>
 loadRawImg(std::string_view Path) {
   int Width{0}, Height{0}, Channels{0};
@@ -30,54 +25,6 @@ loadRawImg(std::string_view Path) {
 
   auto Cast = [](int X) { return static_cast<uint32_t>(X); };
   return std::make_tuple(RawData, Cast(Width), Cast(Height), Cast(Size));
-}
-
-static void transitionImageLayout(PlatformHandler const &PltMgn,
-                                  vk::Image Image, vk::Format Fmt,
-                                  vk::ImageLayout OldLayout,
-                                  vk::ImageLayout NewLayout, uint32_t MipLvls) {
-  auto [SSTC, CmdBuffer] = PltMgn.getSSTC();
-
-  vk::ImageMemoryBarrier Barrier{
-      {}, {}, OldLayout, NewLayout,
-      {}, {}, Image,     {vk::ImageAspectFlagBits::eColor, 0, MipLvls, 0, 1}};
-  vk::PipelineStageFlags SrcStage;
-  vk::PipelineStageFlags DstStage;
-
-  using IL = vk::ImageLayout;
-  if (NewLayout == IL::eDepthStencilAttachmentOptimal) {
-    Barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
-    if (hasStencilComponent(Fmt))
-      Barrier.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
-    // TODO this else causes validation error. But it is actually useless.
-    // else
-    //  barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  }
-
-  using AF = vk::AccessFlagBits;
-  using PS = vk::PipelineStageFlagBits;
-  if (OldLayout == IL::eUndefined && NewLayout == IL::eTransferDstOptimal) {
-    Barrier.srcAccessMask = {};
-    Barrier.dstAccessMask = AF::eTransferWrite;
-    SrcStage = PS::eTopOfPipe;
-    DstStage = PS::eTransfer;
-  } else if (OldLayout == IL::eTransferDstOptimal &&
-             NewLayout == IL::eShaderReadOnlyOptimal) {
-    Barrier.srcAccessMask = AF::eTransferWrite;
-    Barrier.dstAccessMask = AF::eShaderRead;
-    SrcStage = PS::eTransfer;
-    DstStage = PS::eFragmentShader;
-  } else if (OldLayout == IL::eUndefined &&
-             NewLayout == IL::eDepthStencilAttachmentOptimal) {
-    Barrier.srcAccessMask = {};
-    Barrier.dstAccessMask =
-        AF::eDepthStencilAttachmentRead | AF::eDepthStencilAttachmentWrite;
-    SrcStage = PS::eTopOfPipe;
-    DstStage = PS::eEarlyFragmentTests;
-  } else
-    throw std::invalid_argument("unsupported layout transition!");
-
-  CmdBuffer.pipelineBarrier(SrcStage, DstStage, {}, nullptr, nullptr, Barrier);
 }
 
 static void copyBufferToImage(PlatformHandler const &PltMgn, vk::Buffer Buffer,
@@ -202,9 +149,9 @@ public:
         IU::eTransferSrc | IU::eTransferDst | IU::eSampled, MP::eDeviceLocal);
 
     // TODO move it to builder!
-    transitionImageLayout(PltMgn, Img, vk::Format::eR8G8B8A8Srgb,
-                          vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eTransferDstOptimal, MIPlvl);
+    IB.transitionImageLayout(PltMgn, Img, vk::Format::eR8G8B8A8Srgb,
+                             vk::ImageLayout::eUndefined,
+                             vk::ImageLayout::eTransferDstOptimal, MIPlvl);
 
     copyBufferToImage(PltMgn, StagingBuff, Img, Width, Height);
     // Transitioning to SHADER_READ_ONLY while generating mipmaps.

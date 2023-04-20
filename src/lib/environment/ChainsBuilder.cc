@@ -183,7 +183,7 @@ static vk::Format findSupportedFormat(vk::PhysicalDevice const &PhysDev,
 
   throw std::runtime_error("failed to find supported format!");
 }
-static vk::Format findDepthFormat(vk::PhysicalDevice const &PhysDev) {
+vk::Format ChainsBuilder::findDepthFmt(vk::PhysicalDevice PhysDev) const {
   using F = vk::Format;
   return findSupportedFormat(
       PhysDev, {F::eD32Sfloat, F::eD32SfloatS8Uint, F::eD24UnormS8Uint},
@@ -197,7 +197,7 @@ ChainsBuilder::create<vk::RenderPass>(PlatformHandler const &PltMgr,
   auto PhysDev = PltMgr.get<vk::PhysicalDevice>();
   vk::AttachmentDescription DepthAtt{
       {},
-      findDepthFormat(PhysDev),
+      findDepthFmt(PhysDev),
       msaa,
       vk::AttachmentLoadOp::eClear,
       vk::AttachmentStoreOp::eDontCare,

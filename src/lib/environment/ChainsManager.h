@@ -24,6 +24,8 @@ class ChainsManager final {
 
   ImageBuilder::Type IM{};
   vk::ImageView IView{};
+  ImageBuilder::Type DP{};
+  vk::ImageView DView{};
 
 public:
   ChainsManager() = default;
@@ -47,8 +49,19 @@ public:
     IView = IB.create<vk::ImageView>(std::get<0>(IM), B.Fmt,
                                      vk::ImageAspectFlagBits::eColor, 1u);
 
-    // createColorResources();
-    // createDepthResources();
+    auto DepthFmt = B.findDepthFmt(PltMgr.get<vk::PhysicalDevice>());
+    DP = IB.create<ImageBuilder::Type>(
+        B.Ext.width, B.Ext.height, 1u, MSAA, DepthFmt,
+        vk::ImageTiling::eOptimal,
+        vk::Flags(vk::ImageUsageFlagBits::eDepthStencilAttachment),
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
+    DView = IB.create<vk::ImageView>(std::get<0>(DP), DepthFmt,
+                                     vk::ImageAspectFlagBits::eDepth, 1u);
+    // As I understand this part is optional as we will take care of this in the
+    // render pass.
+    IB.transitionImageLayout(
+        PltMgr, std::get<0>(DP), DepthFmt, vk::ImageLayout::eUndefined,
+        vk::ImageLayout::eDepthStencilAttachmentOptimal, 1);
     // createFramebuffers();
   }
   // Believe this getters are temporary.
@@ -64,6 +77,8 @@ public:
   auto &getP() { return P; }
   auto &getColorRes() { return IM; }
   auto &getColorIView() { return IView; }
+  auto &getDepthRes() { return DP; }
+  auto &getDepthIView() { return DView; }
 };
 
 } // namespace gEng

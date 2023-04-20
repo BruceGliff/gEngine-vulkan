@@ -234,8 +234,9 @@ private:
 
     std::tie(colorImage, colorImageMemory) = Chains.getColorRes();
     colorImageView = Chains.getColorIView();
-    // createColorResources();
-    createDepthResources();
+    std::tie(depthImage, depthImageMemory) = Chains.getDepthRes();
+    depthImageView = Chains.getDepthIView();
+
     createFramebuffers();
 
     fs::path ImagePath{EH};

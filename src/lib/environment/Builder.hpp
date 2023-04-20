@@ -25,6 +25,8 @@ struct ChainsBuilder : BuilderInterface<ChainsBuilder> {
   vk::Extent2D Ext{};
   // TODO why do not put Plt as member?
 
+  vk::Format findDepthFmt(vk::PhysicalDevice PhysDev) const;
+
   template <typename T, typename... Args>
   T create(PlatformHandler const &Plt, Args &&...args);
 };
