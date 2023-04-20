@@ -5,9 +5,9 @@
 using namespace gEng;
 namespace opt = boost::program_options;
 
-SysEnv::SysEnv(int argc, char *argv[])
-    : BinPath{fs::path{argv[0]}.remove_filename()},
-      FileName{fs::path{argv[0]}.filename()} {
+void SysEnv::init(int argc, char *argv[]) {
+  BinPath = fs::path{argv[0]}.remove_filename();
+  FileName = fs::path{argv[0]}.filename();
 
   Desc.add_options()("help", "produce help message")(
       "frames-limit", opt::value<uint32_t>(),

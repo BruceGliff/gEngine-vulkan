@@ -218,7 +218,7 @@ private:
     std::tie(m_graphicsQueue, m_presentQueue) =
         PltMgn.get<gEng::detail::GraphPresentQ>();
 
-    Chains.init(PltMgn, m_Window, EH);
+    Chains.init(PltMgn, m_Window);
     m_swapchain = Chains.getSwapchain();
     m_swapchainImages = Chains.getImages();
     m_swapchainImageFormat = Chains.getFormat();
@@ -1436,7 +1436,10 @@ int main(int argc, char *argv[]) {
   std::cout << "Debug\n";
 #endif // Debug
 
-  gEng::SysEnv EH{argc, argv};
+  // TODO think about this interface in singleton
+  // gEng::SysEnv::init(argc, argv);
+  gEng::SysEnv &EH = gEng::SysEnv::getInstance();
+  EH.init(argc, argv);
   if (EH.getHelp())
     return EXIT_SUCCESS;
 

@@ -286,9 +286,10 @@ template <>
 vk::Pipeline ChainsBuilder::create<vk::Pipeline>(PlatformHandler const &PltMgr,
                                                  vk::SampleCountFlagBits &MSAA,
                                                  vk::PipelineLayout &PPL,
-                                                 vk::RenderPass &RPass,
-                                                 SysEnv const &EH) {
+                                                 vk::RenderPass &RPass) {
   auto Dev = PltMgr.get<vk::Device>();
+  auto const &EH = SysEnv::getInstance();
+
   fs::path ShadersPath{EH};
   ShadersPath /= "shaders/";
   Shader VShader{(ShadersPath / "basic.vert.spv").string()};

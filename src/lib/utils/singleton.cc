@@ -1,4 +1,5 @@
 #include "../environment/platform_handler.h"
+#include "gEng/environment.h"
 #include "gEng/global.h"
 
 // Module for late instantiation of each singleton in the program.
@@ -9,5 +10,6 @@
 
 INSTANCE(gEng::PlatformHandler);
 INSTANCE(gEng::GlbManager);
+INSTANCE(gEng::SysEnv);
 
 #undef INSTANCE
