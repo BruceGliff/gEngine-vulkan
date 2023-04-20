@@ -24,7 +24,6 @@ class PlatformHandler final : public singleton<PlatformHandler> {
   friend singleton;
   PlatformHandler() {}
 
-  PltBuilder B;
   DebugMessenger<PltBuilder::EnableDebug> DbgMsger;
 
   template <typename VKType> using Optional = std::optional<VKType>;
@@ -91,6 +90,7 @@ class PlatformHandler final : public singleton<PlatformHandler> {
 
 public:
   void init(Window const &Window) {
+    PltBuilder B;
     auto Inst = B.create<vk::Instance>(DbgMsger);
     auto Surface = B.create<vk::SurfaceKHR>(Inst, Window);
     auto PhysDev = B.create<vk::PhysicalDevice>(Inst, Surface);

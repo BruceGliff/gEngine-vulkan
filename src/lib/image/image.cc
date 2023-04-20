@@ -1,6 +1,7 @@
 #include "gEng/image.h"
 
 #include "BufferBuilder.hpp"
+#include "ImageBuilder.hpp"
 
 #include "../environment/platform_handler.h"
 
@@ -15,19 +16,6 @@ namespace gEng {
 static bool hasStencilComponent(vk::Format Fmt) {
   return Fmt == vk::Format::eD32SfloatS8Uint ||
          Fmt == vk::Format::eD24UnormS8Uint;
-}
-// Finds right type of memory to use.
-// FIXME copy-paste from BufferBuilder.cc
-uint32_t findMemoryType(vk::PhysicalDevice PhysDev, uint32_t TypeFilter,
-                        vk::MemoryPropertyFlags Properties) {
-  vk::PhysicalDeviceMemoryProperties MemProps = PhysDev.getMemoryProperties();
-
-  for (uint32_t i = 0; i != MemProps.memoryTypeCount; ++i)
-    if ((TypeFilter & (1 << i)) &&
-        (MemProps.memoryTypes[i].propertyFlags & Properties) == Properties)
-      return i;
-
-  throw std::runtime_error("failed to find suitable memory type!");
 }
 
 static std::tuple<void *, uint32_t, uint32_t, uint32_t>
@@ -91,6 +79,7 @@ static void transitionImageLayout(PlatformHandler const &PltMgn,
 
   CmdBuffer.pipelineBarrier(SrcStage, DstStage, {}, nullptr, nullptr, Barrier);
 }
+
 static void copyBufferToImage(PlatformHandler const &PltMgn, vk::Buffer Buffer,
                               vk::Image Image, uint32_t Width,
                               uint32_t Height) {
@@ -102,6 +91,7 @@ static void copyBufferToImage(PlatformHandler const &PltMgn, vk::Buffer Buffer,
   CmdBuff.copyBufferToImage(Buffer, Image, vk::ImageLayout::eTransferDstOptimal,
                             Reg);
 }
+
 static void generateMipmaps(PlatformHandler const &PltMgr, vk::Image Img,
                             vk::Format Fmt, uint32_t Width, uint32_t Height,
                             uint32_t MipLvls) {
@@ -168,43 +158,6 @@ static void generateMipmaps(PlatformHandler const &PltMgr, vk::Image Img,
   CmdBuff.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer,
                           vk::PipelineStageFlagBits::eFragmentShader, {},
                           nullptr, nullptr, Barrier);
-}
-
-struct ImageBuilder : BuilderInterface<ImageBuilder> {
-  friend BuilderInterface<ImageBuilder>;
-
-  using Type = std::pair<vk::Image, vk::DeviceMemory>;
-
-  vk::Device Dev;
-  vk::PhysicalDevice PhysDev;
-  ImageBuilder(vk::Device Dev, vk::PhysicalDevice PhysDev)
-      : Dev{Dev}, PhysDev{PhysDev} {}
-
-  // template <typename T, typename... Args> T create(Args &&...args);
-  // TODO is this legal?
-  template <typename T, typename... Args> T create(Args... args);
-};
-
-// FIXME use commit history to find previous (non-working) impl.
-// and try to fix it.
-template <>
-ImageBuilder::Type ImageBuilder::create<ImageBuilder::Type>(
-    uint32_t Width, uint32_t Height, uint32_t MipLevls,
-    vk::SampleCountFlagBits NumSample, vk::Format Fmt, vk::ImageTiling Tiling,
-    vk::Flags<vk::ImageUsageFlagBits> Usage, vk::MemoryPropertyFlagBits Props) {
-  vk::ImageCreateInfo ImageInfo{{},        vk::ImageType::e2D,
-                                Fmt,       {Width, Height, 1},
-                                MipLevls,  1,
-                                NumSample, Tiling,
-                                Usage,     vk::SharingMode::eExclusive};
-  vk::Image Image = Dev.createImage(ImageInfo);
-  vk::MemoryRequirements MemReq = Dev.getImageMemoryRequirements(Image);
-  vk::DeviceMemory ImageMem = Dev.allocateMemory(
-      {MemReq.size, findMemoryType(PhysDev, MemReq.memoryTypeBits, Props)});
-
-  Dev.bindImageMemory(Image, ImageMem, 0);
-
-  return {Image, ImageMem};
 }
 
 class ImageImpl final {

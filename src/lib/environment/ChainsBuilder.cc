@@ -5,6 +5,10 @@
 #include "detail/CommonForPltAndChains.hpp"
 #include "gEng/window.h"
 #include "platform_handler.h"
+#include "shader/shader.h"
+#include "vertex.h"
+// TODO make SysEnv global singleton
+#include "gEng/environment.h"
 
 using namespace gEng;
 
@@ -248,4 +252,135 @@ ChainsBuilder::create<vk::RenderPass>(PlatformHandler const &PltMgr,
                                                        ColorAttResolve};
   return PltMgr.get<vk::Device>().createRenderPass(
       {{}, Attachments, Subpass, Dependency});
+}
+
+template <>
+vk::DescriptorSetLayout
+ChainsBuilder::create<vk::DescriptorSetLayout>(PlatformHandler const &PltMgr) {
+  auto Dev = PltMgr.get<vk::Device>();
+  // TODO samplers are null, but descriptorCount=1!.
+  // Even though there are no pImmutableSamplers in both LB, descriptorCount
+  // has to be at least 1. TODO: find out why.
+  vk::DescriptorSetLayoutBinding LayoutBindingUBO{
+      0, vk::DescriptorType::eUniformBuffer, 1,
+      vk::ShaderStageFlagBits::eVertex};
+  vk::DescriptorSetLayoutBinding LayoutBindingSampler{
+      1, vk::DescriptorType::eCombinedImageSampler, 1,
+      vk::ShaderStageFlagBits::eFragment};
+
+  std::array<vk::DescriptorSetLayoutBinding, 2> Bindings = {
+      LayoutBindingUBO, LayoutBindingSampler};
+
+  return Dev.createDescriptorSetLayout({{}, Bindings});
+}
+
+template <>
+vk::PipelineLayout
+ChainsBuilder::create<vk::PipelineLayout>(PlatformHandler const &PltMgr,
+                                          vk::DescriptorSetLayout &DSL) {
+  auto Dev = PltMgr.get<vk::Device>();
+  return Dev.createPipelineLayout({{}, DSL});
+}
+
+template <>
+vk::Pipeline ChainsBuilder::create<vk::Pipeline>(PlatformHandler const &PltMgr,
+                                                 vk::SampleCountFlagBits &MSAA,
+                                                 vk::PipelineLayout &PPL,
+                                                 vk::RenderPass &RPass,
+                                                 SysEnv const &EH) {
+  auto Dev = PltMgr.get<vk::Device>();
+  fs::path ShadersPath{EH};
+  ShadersPath /= "shaders/";
+  Shader VShader{(ShadersPath / "basic.vert.spv").string()};
+  Shader FShader{(ShadersPath / "basic.frag.spv").string()};
+
+  vk::ShaderModule VShaderModule =
+      Dev.createShaderModule({{}, VShader.getSPIRV()});
+  vk::ShaderModule FShaderModule =
+      Dev.createShaderModule({{}, FShader.getSPIRV()});
+
+  vk::PipelineShaderStageCreateInfo VSInfo{
+      {}, vk::ShaderStageFlagBits::eVertex, VShaderModule, "main"};
+  vk::PipelineShaderStageCreateInfo FSInfo{
+      {}, vk::ShaderStageFlagBits::eFragment, FShaderModule, "main"};
+
+  std::array<vk::PipelineShaderStageCreateInfo, 2> ShaderStages{VSInfo, FSInfo};
+
+  // Fill Vertex binding info.
+  auto bindDescr = Vertex::getBindDescription();
+  auto attrDescr = Vertex::getAttrDescription();
+
+  vk::PipelineVertexInputStateCreateInfo VInputInfo{{}, bindDescr, attrDescr};
+
+  // The rules how verticies will be treated(lines, points, triangles..)
+  vk::PipelineInputAssemblyStateCreateInfo InputAssembly{
+      {}, vk::PrimitiveTopology::eTriangleList, VK_FALSE};
+
+  // Read this in FixedFunction part.
+  vk::Viewport Viewport{0.0f, 0.0f, (float)Ext.width, (float)Ext.height,
+                        0.0f, 1.0f};
+  vk::Rect2D Scissor{{0, 0}, Ext};
+
+  vk::PipelineViewportStateCreateInfo ViewportState{{}, Viewport, Scissor};
+
+  vk::PipelineRasterizationStateCreateInfo Rast{
+      {},
+      VK_FALSE,
+      VK_FALSE,
+      vk::PolygonMode::eFill,
+      vk::CullModeFlagBits::eBack,
+      vk::FrontFace::eCounterClockwise};
+  Rast.setLineWidth(1.f);
+
+  vk::PipelineMultisampleStateCreateInfo Multisampling{
+      {}, MSAA, VK_TRUE, .2f, nullptr};
+
+  using CC = vk::ColorComponentFlagBits;
+  vk::PipelineColorBlendAttachmentState ColorBlendAttachment{
+      VK_FALSE,
+      vk::BlendFactor::eOne,
+      vk::BlendFactor::eZero,
+      vk::BlendOp::eAdd,
+      vk::BlendFactor::eOne,
+      vk::BlendFactor::eZero,
+      vk::BlendOp::eAdd,
+      CC::eR | CC::eG | CC::eB | CC::eA};
+
+  vk::PipelineColorBlendStateCreateInfo ColorBlending{
+      {}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachment};
+
+  // There are some states of pipeline that can be changed dynamicly.
+  std::array<vk::DynamicState, 2> DynStates{vk::DynamicState::eViewport,
+                                            vk::DynamicState::eLineWidth};
+
+  vk::PipelineDynamicStateCreateInfo DynState{{}, DynStates};
+
+  vk::PipelineDepthStencilStateCreateInfo DepthStencil{
+      {}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE, VK_FALSE, {},
+      {}, 0.f,     1.f};
+
+  vk::GraphicsPipelineCreateInfo PipelineInfo{{},
+                                              ShaderStages,
+                                              &VInputInfo,
+                                              &InputAssembly,
+                                              {},
+                                              &ViewportState,
+                                              &Rast,
+                                              &Multisampling,
+                                              &DepthStencil,
+                                              &ColorBlending,
+                                              {},
+                                              PPL,
+                                              RPass,
+                                              {},
+                                              {},
+                                              -1};
+
+  // It creates several pipelines.
+  auto P =
+      Dev.createGraphicsPipelines(VK_NULL_HANDLE, PipelineInfo).value.at(0);
+
+  Dev.destroyShaderModule(FShaderModule);
+  Dev.destroyShaderModule(VShaderModule);
+  return P;
 }

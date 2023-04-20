@@ -218,7 +218,7 @@ private:
     std::tie(m_graphicsQueue, m_presentQueue) =
         PltMgn.get<gEng::detail::GraphPresentQ>();
 
-    Chains.init(PltMgn, m_Window);
+    Chains.init(PltMgn, m_Window, EH);
     m_swapchain = Chains.getSwapchain();
     m_swapchainImages = Chains.getImages();
     m_swapchainImageFormat = Chains.getFormat();
@@ -226,11 +226,12 @@ private:
     m_swapchainExtent = Chains.getExtent();
     m_renderPass = Chains.getRPass();
     msaaSamples = Chains.getMSAA();
+    descriptorSetLayout = Chains.getDSL();
+    m_pipelineLayout = Chains.getPPL();
+    m_graphicsPipeline = Chains.getP();
 
-    createDescriptorSetLayout();
-    createGraphicPipeline();
     m_commandPool = PltMgn.get<vk::CommandPool>();
-    // createCommandPool();
+
     createColorResources();
     createDepthResources();
     createFramebuffers();
@@ -946,7 +947,8 @@ private:
 
     vk::PipelineDynamicStateCreateInfo DynState{{}, DynStates};
 
-    m_pipelineLayout = m_device.createPipelineLayout({{}, descriptorSetLayout});
+    // m_pipelineLayout = m_device.createPipelineLayout({{},
+    // descriptorSetLayout});
 
     vk::PipelineDepthStencilStateCreateInfo DepthStencil{
         {}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE, VK_FALSE, {},
