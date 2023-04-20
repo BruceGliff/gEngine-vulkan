@@ -237,7 +237,7 @@ private:
     std::tie(depthImage, depthImageMemory) = Chains.getDepthRes();
     depthImageView = Chains.getDepthIView();
 
-    createFramebuffers();
+    m_swapChainFramebuffers = Chains.getFrameBuffers();
 
     fs::path ImagePath{EH};
     ImagePath /= "assets/textures/viking_room.png";

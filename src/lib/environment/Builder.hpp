@@ -24,6 +24,7 @@ struct ChainsBuilder : BuilderInterface<ChainsBuilder> {
   vk::Format Fmt{};
   vk::Extent2D Ext{};
   // TODO why do not put Plt as member?
+  using FrameBuffers = std::vector<vk::Framebuffer>;
 
   vk::Format findDepthFmt(vk::PhysicalDevice PhysDev) const;
 

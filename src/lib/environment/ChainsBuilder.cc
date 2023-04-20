@@ -385,3 +385,21 @@ vk::Pipeline ChainsBuilder::create<vk::Pipeline>(PlatformHandler const &PltMgr,
   Dev.destroyShaderModule(VShaderModule);
   return P;
 }
+
+template <>
+ChainsBuilder::FrameBuffers ChainsBuilder::create<ChainsBuilder::FrameBuffers>(
+    PlatformHandler const &PltMgr, vk::ImageView &CIV, vk::ImageView &DIV,
+    std::vector<vk::ImageView> &SCIV, vk::RenderPass &RPass) {
+  auto Dev = PltMgr.get<vk::Device>();
+  // Order of the attachments is essential!
+  // It is reverse from created in createRenderPass
+  std::array<vk::ImageView, 3> Atts = {CIV, DIV, {}};
+  ChainsBuilder::FrameBuffers Buffs;
+  std::transform(SCIV.begin(), SCIV.end(), std::back_inserter(Buffs),
+                 [&Atts, this, &Dev, &RPass](vk::ImageView ImgV) {
+                   Atts[2] = ImgV;
+                   return Dev.createFramebuffer(
+                       {{}, RPass, Atts, Ext.width, Ext.height, 1});
+                 });
+  return Buffs;
+}

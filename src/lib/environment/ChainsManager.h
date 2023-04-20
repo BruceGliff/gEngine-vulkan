@@ -27,6 +27,8 @@ class ChainsManager final {
   ImageBuilder::Type DP{};
   vk::ImageView DView{};
 
+  ChainsBuilder::FrameBuffers FrameBuffers;
+
 public:
   ChainsManager() = default;
 
@@ -62,7 +64,9 @@ public:
     IB.transitionImageLayout(
         PltMgr, std::get<0>(DP), DepthFmt, vk::ImageLayout::eUndefined,
         vk::ImageLayout::eDepthStencilAttachmentOptimal, 1);
-    // createFramebuffers();
+
+    FrameBuffers = B.create<ChainsBuilder::FrameBuffers>(PltMgr, IView, DView,
+                                                         SCs.ImgView, RPass);
   }
   // Believe this getters are temporary.
   vk::SwapchainKHR &getSwapchain() { return Swapchain; }
@@ -79,6 +83,7 @@ public:
   auto &getColorIView() { return IView; }
   auto &getDepthRes() { return DP; }
   auto &getDepthIView() { return DView; }
+  auto &getFrameBuffers() { return FrameBuffers; }
 };
 
 } // namespace gEng
