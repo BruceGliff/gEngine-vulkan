@@ -4,6 +4,8 @@
 #include "detail/Types.hpp"
 #include "platform_handler.h"
 
+#include "../image/ImageBuilder.hpp"
+
 namespace gEng {
 
 class Window;
@@ -20,6 +22,9 @@ class ChainsManager final {
   vk::PipelineLayout PPL{};
   vk::Pipeline P{};
 
+  ImageBuilder::Type IM{};
+  vk::ImageView IView{};
+
 public:
   ChainsManager() = default;
 
@@ -32,6 +37,19 @@ public:
     DescSet = B.create<vk::DescriptorSetLayout>(PltMgr);
     PPL = B.create<vk::PipelineLayout>(PltMgr, DescSet);
     P = B.create<vk::Pipeline>(PltMgr, MSAA, PPL, RPass);
+
+    ImageBuilder IB{PltMgr.get<vk::Device>(), PltMgr.get<vk::PhysicalDevice>()};
+    IM = IB.create<ImageBuilder::Type>(
+        B.Ext.width, B.Ext.height, 1u, MSAA, B.Fmt, vk::ImageTiling::eOptimal,
+        vk::ImageUsageFlagBits::eTransientAttachment |
+            vk::ImageUsageFlagBits::eColorAttachment,
+        vk::MemoryPropertyFlagBits::eDeviceLocal);
+    IView = IB.create<vk::ImageView>(std::get<0>(IM), B.Fmt,
+                                     vk::ImageAspectFlagBits::eColor, 1u);
+
+    // createColorResources();
+    // createDepthResources();
+    // createFramebuffers();
   }
   // Believe this getters are temporary.
   vk::SwapchainKHR &getSwapchain() { return Swapchain; }
@@ -44,6 +62,8 @@ public:
   auto &getDSL() { return DescSet; }
   auto &getPPL() { return PPL; }
   auto &getP() { return P; }
+  auto &getColorRes() { return IM; }
+  auto &getColorIView() { return IView; }
 };
 
 } // namespace gEng

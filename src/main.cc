@@ -232,7 +232,9 @@ private:
 
     m_commandPool = PltMgn.get<vk::CommandPool>();
 
-    createColorResources();
+    std::tie(colorImage, colorImageMemory) = Chains.getColorRes();
+    colorImageView = Chains.getColorIView();
+    // createColorResources();
     createDepthResources();
     createFramebuffers();
 

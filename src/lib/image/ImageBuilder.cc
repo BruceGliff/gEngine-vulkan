@@ -41,3 +41,16 @@ ImageBuilder::Type ImageBuilder::create<ImageBuilder::Type>(
 
   return {Image, ImageMem};
 }
+
+template <>
+vk::ImageView
+ImageBuilder::create<vk::ImageView>(vk::Image Image, vk::Format Format,
+                                    vk::ImageAspectFlagBits AspectFlags,
+                                    uint32_t MipLevels) {
+  return Dev.createImageView({{},
+                              Image,
+                              vk::ImageViewType::e2D,
+                              Format,
+                              {},
+                              {AspectFlags, 0, MipLevels, 0, 1}});
+}
