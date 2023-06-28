@@ -129,7 +129,6 @@ class HelloTriangleApplication : gEng::UserWindow {
   vk::Extent2D m_swapchainExtent;
   // ImageView used to specify how to treat VkImage.
   // For each VkImage we create VkImageView.
-  std::vector<vk::ImageView> m_swapchainImageViews;
 
   vk::RenderPass m_renderPass;
   // Used for an uniform variable.
@@ -172,15 +171,6 @@ class HelloTriangleApplication : gEng::UserWindow {
 
   vk::ImageView textureImageView;
   vk::Sampler textureSampler;
-
-  vk::Image depthImage;
-  vk::DeviceMemory depthImageMemory;
-  vk::ImageView depthImageView;
-
-  vk::Image colorImage;
-  vk::DeviceMemory colorImageMemory;
-  vk::ImageView colorImageView;
-
 public:
   HelloTriangleApplication(gEng::SysEnv &InEH)
       : EH{InEH}, m_Window{1600u, 900u, "gEngine", this} {}
@@ -199,25 +189,16 @@ public:
 private:
   void fillFromChainManager() {
     m_swapchain = Chains.getSwapchain();
-    m_swapchainImageViews = Chains.getImageViews();
     m_swapchainExtent = Chains.getExtent();
     m_renderPass = Chains.getRPass();
     descriptorSetLayout = Chains.getDSL();
     m_pipelineLayout = Chains.getPPL();
     m_graphicsPipeline = Chains.getP();
 
-
-    std::tie(colorImage, colorImageMemory) = Chains.getColorRes();
-    colorImageView = Chains.getColorIView();
-    std::tie(depthImage, depthImageMemory) = Chains.getDepthRes();
-    depthImageView = Chains.getDepthIView();
-
     m_swapChainFramebuffers = Chains.getFrameBuffers();
   }
 
   void initVulkan() {
-    // createInstance();
-    // setupDebugMessenger();
     auto &PltMgn = gEng::PlatformHandler::getInstance();
     PltMgn.init(m_Window);
 
@@ -1076,26 +1057,7 @@ private:
   }
 
   void cleanupSwapchain() {
-    m_device.destroyImageView(colorImageView);
-    m_device.destroyImage(colorImage);
-    m_device.freeMemory(colorImageMemory);
-
-    m_device.destroyImageView(depthImageView);
-    m_device.destroyImage(depthImage);
-    m_device.freeMemory(depthImageMemory);
-
-    for (auto &&SwapchainBuff : m_swapChainFramebuffers)
-      m_device.destroyFramebuffer(SwapchainBuff);
-
-    m_device.destroyPipeline(m_graphicsPipeline);
-    m_device.destroyPipelineLayout(m_pipelineLayout);
-    m_device.destroyRenderPass(m_renderPass);
-
-    for (auto &&ImgView : m_swapchainImageViews)
-      m_device.destroyImageView(ImgView);
-
-    m_device.destroySwapchainKHR(m_swapchain);
-
+    Chains.cleanup(m_device);
     for (auto &&UniBuff : uniformBuffers)
       m_device.destroyBuffer(UniBuff);
     for (auto &&UniBuffMem : uniformBuffersMemory)

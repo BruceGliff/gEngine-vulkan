@@ -5,6 +5,7 @@
 #include "platform_handler.h"
 
 #include "../image/ImageBuilder.hpp"
+#include <vulkan/vulkan_handles.hpp>
 
 namespace gEng {
 
@@ -76,15 +77,33 @@ public:
   std::vector<vk::ImageView> &getImageViews() { return SCs.ImgView; }
   vk::Extent2D &getExtent() { return B.Ext; }
   vk::RenderPass &getRPass() { return RPass; };
-  auto &getMSAA() { return MSAA; }
   auto &getDSL() { return DescSet; }
   auto &getPPL() { return PPL; }
   auto &getP() { return P; }
-  auto &getColorRes() { return IM; }
-  auto &getColorIView() { return IView; }
-  auto &getDepthRes() { return DP; }
-  auto &getDepthIView() { return DView; }
   auto &getFrameBuffers() { return FrameBuffers; }
+
+  void cleanup(vk::Device Dev) {
+    Dev.destroyImageView(IView);
+    Dev.destroyImage(std::get<vk::Image>(IM));
+    Dev.freeMemory(std::get<vk::DeviceMemory>(IM));
+
+    Dev.destroyImageView(DView);
+    Dev.destroyImage(std::get<vk::Image>(DP));
+    Dev.freeMemory(std::get<vk::DeviceMemory>(DP));
+
+    for (auto &&SwapchainBuff : FrameBuffers)
+      Dev.destroyFramebuffer(SwapchainBuff);
+
+    Dev.destroyPipeline(P);
+    Dev.destroyPipelineLayout(PPL);
+    Dev.destroyRenderPass(RPass);
+
+    // FIXME SCs.Img?
+    for (auto &&ImgView : SCs.ImgView)
+      Dev.destroyImageView(ImgView);
+
+    Dev.destroySwapchainKHR(Swapchain);
+  }
 };
 
 } // namespace gEng
