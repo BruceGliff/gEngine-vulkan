@@ -16,7 +16,6 @@
 #include "lib/environment/ChainsManager.h"
 #include "lib/environment/platform_handler.h"
 
-#include "image/image.h"
 #include "shader/shader.h"
 #include "vertex.h"
 
