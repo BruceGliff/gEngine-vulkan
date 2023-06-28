@@ -11,7 +11,7 @@ namespace gEng {
 class Window;
 
 class ChainsManager final {
-  // Maybe move to init
+  // Maybe move to constructor
   ChainsBuilder B;
 
   vk::SwapchainKHR Swapchain{};
@@ -31,9 +31,7 @@ class ChainsManager final {
 
 public:
   ChainsManager() = default;
-
-  // TODO create constructor and remove ManagerBehavior
-  void init(PlatformHandler const &PltMgr, Window const &W) {
+  ChainsManager(PlatformHandler const &PltMgr, Window const &W) {
     MSAA = B.create<vk::SampleCountFlagBits>(PltMgr);
     Swapchain = B.create<vk::SwapchainKHR>(PltMgr, W);
     SCs = B.create<detail::Swapchains>(PltMgr, Swapchain);
@@ -68,6 +66,9 @@ public:
     FrameBuffers = B.create<ChainsBuilder::FrameBuffers>(PltMgr, IView, DView,
                                                          SCs.ImgView, RPass);
   }
+  ChainsManager(ChainsManager &&) = default;
+  ChainsManager &operator=(ChainsManager &&) = default;
+
   // Believe this getters are temporary.
   vk::SwapchainKHR &getSwapchain() { return Swapchain; }
   vk::Format &getFormat() { return B.Fmt; }

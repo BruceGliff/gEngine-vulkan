@@ -39,3 +39,7 @@ build/
 # Visual Studio Code
 .vscode/
 .vs/
+.cache/
+
+.dir-locals.el
+compile_commands.json

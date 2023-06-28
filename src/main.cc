@@ -125,9 +125,7 @@ class HelloTriangleApplication : gEng::UserWindow {
 
   gEng::ChainsManager Chains{};
   vk::SwapchainKHR m_swapchain{};
-  std::vector<vk::Image> m_swapchainImages;
 
-  vk::Format m_swapchainImageFormat;
   vk::Extent2D m_swapchainExtent;
   // ImageView used to specify how to treat VkImage.
   // For each VkImage we create VkImageView.
@@ -179,8 +177,6 @@ class HelloTriangleApplication : gEng::UserWindow {
   vk::DeviceMemory depthImageMemory;
   vk::ImageView depthImageView;
 
-  // For msaa.
-  vk::SampleCountFlagBits msaaSamples = vk::SampleCountFlagBits::e1;
   vk::Image colorImage;
   vk::DeviceMemory colorImageMemory;
   vk::ImageView colorImageView;
@@ -201,6 +197,23 @@ public:
   }
 
 private:
+  void fillFromChainManager() {
+    m_swapchain = Chains.getSwapchain();
+    m_swapchainImageViews = Chains.getImageViews();
+    m_swapchainExtent = Chains.getExtent();
+    m_renderPass = Chains.getRPass();
+    descriptorSetLayout = Chains.getDSL();
+    m_pipelineLayout = Chains.getPPL();
+    m_graphicsPipeline = Chains.getP();
+
+
+    std::tie(colorImage, colorImageMemory) = Chains.getColorRes();
+    colorImageView = Chains.getColorIView();
+    std::tie(depthImage, depthImageMemory) = Chains.getDepthRes();
+    depthImageView = Chains.getDepthIView();
+
+    m_swapChainFramebuffers = Chains.getFrameBuffers();
+  }
 
   void initVulkan() {
     // createInstance();
@@ -212,32 +225,13 @@ private:
     m_surface = PltMgn.get<vk::SurfaceKHR>();
     m_physicalDevice = PltMgn.get<vk::PhysicalDevice>();
     m_device = PltMgn.get<vk::Device>();
+    m_commandPool = PltMgn.get<vk::CommandPool>();
 
-    // pickPhysicalDevice();
-    msaaSamples = getMaxUsableSampleCount();
     std::tie(m_graphicsQueue, m_presentQueue) =
         PltMgn.get<gEng::detail::GraphPresentQ>();
 
-    Chains.init(PltMgn, m_Window);
-    m_swapchain = Chains.getSwapchain();
-    m_swapchainImages = Chains.getImages();
-    m_swapchainImageFormat = Chains.getFormat();
-    m_swapchainImageViews = Chains.getImageViews();
-    m_swapchainExtent = Chains.getExtent();
-    m_renderPass = Chains.getRPass();
-    msaaSamples = Chains.getMSAA();
-    descriptorSetLayout = Chains.getDSL();
-    m_pipelineLayout = Chains.getPPL();
-    m_graphicsPipeline = Chains.getP();
-
-    m_commandPool = PltMgn.get<vk::CommandPool>();
-
-    std::tie(colorImage, colorImageMemory) = Chains.getColorRes();
-    colorImageView = Chains.getColorIView();
-    std::tie(depthImage, depthImageMemory) = Chains.getDepthRes();
-    depthImageView = Chains.getDepthIView();
-
-    m_swapChainFramebuffers = Chains.getFrameBuffers();
+    Chains = gEng::ChainsManager{PltMgn, m_Window};
+    fillFromChainManager();
 
     fs::path ImagePath{EH};
     ImagePath /= "assets/textures/viking_room.png";
@@ -252,19 +246,6 @@ private:
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
-  }
-
-  void createColorResources() {
-    vk::Format ColorFmt = m_swapchainImageFormat;
-
-    std::tie(colorImage, colorImageMemory) =
-        createImage(m_swapchainExtent.width, m_swapchainExtent.height, 1,
-                    msaaSamples, ColorFmt, vk::ImageTiling::eOptimal,
-                    vk::ImageUsageFlagBits::eTransientAttachment |
-                        vk::ImageUsageFlagBits::eColorAttachment,
-                    vk::MemoryPropertyFlagBits::eDeviceLocal);
-    colorImageView = createImageView(colorImage, ColorFmt,
-                                     vk::ImageAspectFlagBits::eColor, 1);
   }
 
   vk::SampleCountFlagBits getMaxUsableSampleCount() {
@@ -326,23 +307,6 @@ private:
   }
 
   // TODO combine with image.cc ImageBuilder
-  void createDepthResources() {
-    vk::Format DepthFmt = findDepthFormat();
-
-    std::tie(depthImage, depthImageMemory) =
-        createImage(m_swapchainExtent.width, m_swapchainExtent.height, 1,
-                    msaaSamples, DepthFmt, vk::ImageTiling::eOptimal,
-                    vk::ImageUsageFlagBits::eDepthStencilAttachment,
-                    vk::MemoryPropertyFlagBits::eDeviceLocal);
-    depthImageView = createImageView(depthImage, DepthFmt,
-                                     vk::ImageAspectFlagBits::eDepth, 1);
-
-    // As I understand this part is optional as we will take care of this in the
-    // render pass.
-    transitionImageLayout(depthImage, DepthFmt, vk::ImageLayout::eUndefined,
-                          vk::ImageLayout::eDepthStencilAttachmentOptimal, 1);
-  }
-
   vk::Format findDepthFormat() {
     using F = vk::Format;
     return findSupportedFormat(
@@ -595,23 +559,6 @@ private:
                            vk::MemoryPropertyFlagBits::eHostCoherent);
   }
 
-  void createDescriptorSetLayout() {
-    // TODO samplers are null, but descriptorCount=1!.
-    // Even though there are no pImmutableSamplers in both LB, descriptorCount
-    // has to be at least 1. TODO: find out why.
-    vk::DescriptorSetLayoutBinding LayoutBindingUBO{
-        0, vk::DescriptorType::eUniformBuffer, 1,
-        vk::ShaderStageFlagBits::eVertex};
-    vk::DescriptorSetLayoutBinding LayoutBindingSampler{
-        1, vk::DescriptorType::eCombinedImageSampler, 1,
-        vk::ShaderStageFlagBits::eFragment};
-
-    std::array<vk::DescriptorSetLayoutBinding, 2> Bindings = {
-        LayoutBindingUBO, LayoutBindingSampler};
-
-    descriptorSetLayout = m_device.createDescriptorSetLayout({{}, Bindings});
-  }
-
   void createVertexBuffer() {
     vk::DeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
 
@@ -676,14 +623,10 @@ private:
     m_Window.updExtent();
 
     m_device.waitIdle();
+    auto &PltMgn = gEng::PlatformHandler::getInstance();
+    Chains = gEng::ChainsManager{PltMgn, m_Window};
+    fillFromChainManager();
 
-    createSwapchain();
-    createImageViews();
-    createRenderPass();
-    createGraphicPipeline();
-    createColorResources();
-    createDepthResources();
-    createFramebuffers();
     createUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();
@@ -796,193 +739,6 @@ private:
          queueFamilyIndices.GraphicsFamily.value()});
   }
 
-  void createFramebuffers() {
-    // Order of the attachments is essential!
-    // It is reverse from created in createRenderPass
-    std::array<vk::ImageView, 3> Atts = {colorImageView, depthImageView, {}};
-    std::vector<vk::Framebuffer> swapchainBuffrs;
-    std::transform(m_swapchainImageViews.begin(), m_swapchainImageViews.end(),
-                   std::back_inserter(swapchainBuffrs),
-                   [&Atts, this](vk::ImageView &ImgV) {
-                     Atts[2] = ImgV;
-                     return m_device.createFramebuffer(
-                         {{},
-                          m_renderPass,
-                          Atts,
-                          m_swapchainExtent.width,
-                          m_swapchainExtent.height,
-                          1});
-                   });
-
-    m_swapChainFramebuffers = std::move(swapchainBuffrs);
-  }
-
-  void createRenderPass() {
-    vk::AttachmentDescription DepthAtt{
-        {},
-        findDepthFormat(),
-        msaaSamples,
-        vk::AttachmentLoadOp::eClear,
-        vk::AttachmentStoreOp::eDontCare,
-        vk::AttachmentLoadOp::eDontCare,
-        vk::AttachmentStoreOp::eDontCare,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eDepthStencilAttachmentOptimal};
-    vk::AttachmentReference DepthAttRef{
-        1, vk::ImageLayout::eDepthStencilAttachmentOptimal};
-
-    vk::AttachmentDescription ColorAtt{
-        {},
-        m_swapchainImageFormat,
-        msaaSamples,
-        vk::AttachmentLoadOp::eClear,
-        vk::AttachmentStoreOp::eStore,
-        vk::AttachmentLoadOp::eDontCare,
-        vk::AttachmentStoreOp::eDontCare,
-        vk::ImageLayout::eUndefined,
-        vk::ImageLayout::eColorAttachmentOptimal};
-    vk::AttachmentReference ColorAttRef{
-        0, vk::ImageLayout::eColorAttachmentOptimal};
-
-    vk::AttachmentDescription ColorAttResolve{{},
-                                              m_swapchainImageFormat,
-                                              vk::SampleCountFlagBits::e1,
-                                              vk::AttachmentLoadOp::eDontCare,
-                                              vk::AttachmentStoreOp::eStore,
-                                              vk::AttachmentLoadOp::eDontCare,
-                                              vk::AttachmentStoreOp::eDontCare,
-                                              vk::ImageLayout::eUndefined,
-                                              vk::ImageLayout::ePresentSrcKHR};
-    vk::AttachmentReference ColorAttResolveRef{
-        2, vk::ImageLayout::eColorAttachmentOptimal};
-
-    // TODO: empty input attachments(3rd operand).
-    vk::SubpassDescription Subpass{{},
-                                   vk::PipelineBindPoint::eGraphics,
-                                   {},
-                                   ColorAttRef,
-                                   ColorAttResolveRef,
-                                   &DepthAttRef};
-
-    using Fbits = vk::PipelineStageFlagBits;
-    vk::SubpassDependency Dependency{
-        VK_SUBPASS_EXTERNAL, 0,
-        Fbits::eColorAttachmentOutput | Fbits::eEarlyFragmentTests,
-        Fbits::eColorAttachmentOutput | Fbits::eEarlyFragmentTests,
-        vk::AccessFlagBits::eColorAttachmentWrite |
-            vk::AccessFlagBits::eDepthStencilAttachmentWrite};
-
-    std::array<vk::AttachmentDescription, 3> Attachments{ColorAtt, DepthAtt,
-                                                         ColorAttResolve};
-    m_renderPass =
-        m_device.createRenderPass({{}, Attachments, Subpass, Dependency});
-  }
-
-  void createGraphicPipeline() {
-    fs::path ShadersPath{EH};
-    ShadersPath /= "shaders/";
-    Shader VShader{(ShadersPath / "basic.vert.spv").string()};
-    Shader FShader{(ShadersPath / "basic.frag.spv").string()};
-
-    vk::ShaderModule VShaderModule =
-        m_device.createShaderModule({{}, VShader.getSPIRV()});
-    vk::ShaderModule FShaderModule =
-        m_device.createShaderModule({{}, FShader.getSPIRV()});
-
-    vk::PipelineShaderStageCreateInfo VSInfo{
-        {}, vk::ShaderStageFlagBits::eVertex, VShaderModule, "main"};
-    vk::PipelineShaderStageCreateInfo FSInfo{
-        {}, vk::ShaderStageFlagBits::eFragment, FShaderModule, "main"};
-
-    std::array<vk::PipelineShaderStageCreateInfo, 2> ShaderStages{VSInfo,
-                                                                  FSInfo};
-
-    // Fill Vertex binding info.
-    auto bindDescr = Vertex::getBindDescription();
-    auto attrDescr = Vertex::getAttrDescription();
-
-    vk::PipelineVertexInputStateCreateInfo VInputInfo{{}, bindDescr, attrDescr};
-
-    // The rules how verticies will be treated(lines, points, triangles..)
-    vk::PipelineInputAssemblyStateCreateInfo InputAssembly{
-        {}, vk::PrimitiveTopology::eTriangleList, VK_FALSE};
-
-    // Read this in FixedFunction part.
-    vk::Viewport Viewport{0.0f,
-                          0.0f,
-                          (float)m_swapchainExtent.width,
-                          (float)m_swapchainExtent.height,
-                          0.0f,
-                          1.0f};
-    vk::Rect2D Scissor{{0, 0}, m_swapchainExtent};
-
-    vk::PipelineViewportStateCreateInfo ViewportState{{}, Viewport, Scissor};
-
-    vk::PipelineRasterizationStateCreateInfo Rast{
-        {},
-        VK_FALSE,
-        VK_FALSE,
-        vk::PolygonMode::eFill,
-        vk::CullModeFlagBits::eBack,
-        vk::FrontFace::eCounterClockwise};
-    Rast.setLineWidth(1.f);
-
-    vk::PipelineMultisampleStateCreateInfo Multisampling{
-        {}, msaaSamples, VK_TRUE, .2f, nullptr};
-
-    using CC = vk::ColorComponentFlagBits;
-    vk::PipelineColorBlendAttachmentState ColorBlendAttachment{
-        VK_FALSE,
-        vk::BlendFactor::eOne,
-        vk::BlendFactor::eZero,
-        vk::BlendOp::eAdd,
-        vk::BlendFactor::eOne,
-        vk::BlendFactor::eZero,
-        vk::BlendOp::eAdd,
-        CC::eR | CC::eG | CC::eB | CC::eA};
-
-    vk::PipelineColorBlendStateCreateInfo ColorBlending{
-        {}, VK_FALSE, vk::LogicOp::eCopy, ColorBlendAttachment};
-
-    // There are some states of pipeline that can be changed dynamicly.
-    std::array<vk::DynamicState, 2> DynStates{vk::DynamicState::eViewport,
-                                              vk::DynamicState::eLineWidth};
-
-    vk::PipelineDynamicStateCreateInfo DynState{{}, DynStates};
-
-    // m_pipelineLayout = m_device.createPipelineLayout({{},
-    // descriptorSetLayout});
-
-    vk::PipelineDepthStencilStateCreateInfo DepthStencil{
-        {}, VK_TRUE, VK_TRUE, vk::CompareOp::eLess, VK_FALSE, VK_FALSE, {},
-        {}, 0.f,     1.f};
-
-    vk::GraphicsPipelineCreateInfo PipelineInfo{{},
-                                                ShaderStages,
-                                                &VInputInfo,
-                                                &InputAssembly,
-                                                {},
-                                                &ViewportState,
-                                                &Rast,
-                                                &Multisampling,
-                                                &DepthStencil,
-                                                &ColorBlending,
-                                                {},
-                                                m_pipelineLayout,
-                                                m_renderPass,
-                                                {},
-                                                {},
-                                                -1};
-
-    // It creates several pipelines.
-    m_graphicsPipeline =
-        m_device.createGraphicsPipelines(VK_NULL_HANDLE, PipelineInfo)
-            .value.at(0);
-
-    m_device.destroyShaderModule(FShaderModule);
-    m_device.destroyShaderModule(VShaderModule);
-  }
-
   // Finds right type of memory to use.
   uint32_t findMemoryType(uint32_t TypeFilter,
                           vk::MemoryPropertyFlags Properties) {
@@ -997,66 +753,6 @@ private:
     throw std::runtime_error("failed to find suitable memory type!");
   }
 
-  void createImageViews() {
-    std::vector<vk::ImageView> ImgViews;
-    std::transform(m_swapchainImages.begin(), m_swapchainImages.end(),
-                   std::back_inserter(ImgViews), [this](vk::Image const &Img) {
-                     return createImageView(Img, m_swapchainImageFormat,
-                                            vk::ImageAspectFlagBits::eColor, 1);
-                   });
-
-    m_swapchainImageViews = std::move(ImgViews);
-  }
-
-  void createSwapchain() {
-    SwapchainSupportDetails SwapchainSupport =
-        querySwapchainSupport(m_physicalDevice);
-
-    vk::SurfaceFormatKHR SurfFmt =
-        chooseSwapSurfaceFormat(SwapchainSupport.formats);
-    vk::PresentModeKHR PresentMode =
-        chooseSwapPresentMode(SwapchainSupport.presentModes);
-    m_swapchainExtent = chooseSwapExtent(SwapchainSupport.capabilities);
-
-    // min images count in swap chain(plus one).
-    uint32_t ImageCount = SwapchainSupport.capabilities.minImageCount + 1;
-    // Not to go throught max ImageCount (0 means no upper-bounds).
-    if (SwapchainSupport.capabilities.maxImageCount > 0 &&
-        ImageCount > SwapchainSupport.capabilities.maxImageCount)
-      ImageCount = SwapchainSupport.capabilities.maxImageCount;
-
-    QueueFamilyIndices Indices = findQueueFamilies(m_physicalDevice);
-    bool const IsFamiliesSame = Indices.GraphicsFamily == Indices.PresentFamily;
-    // Next, we need to specify how to handle swap chain images that will be
-    // used across multiple queue families.
-    std::vector<uint32_t> FamilyIndices =
-        !IsFamiliesSame ? std::vector<uint32_t>{Indices.GraphicsFamily.value(),
-                                                Indices.PresentFamily.value()}
-                        : std::vector<uint32_t>{};
-    vk::SharingMode SMode = !IsFamiliesSame ? vk::SharingMode::eConcurrent
-                                            : vk::SharingMode::eExclusive;
-
-    m_swapchainImageFormat = SurfFmt.format;
-    vk::SwapchainCreateInfoKHR const CreateInfo{
-        {},
-        m_surface,
-        ImageCount,
-        m_swapchainImageFormat,
-        SurfFmt.colorSpace,
-        m_swapchainExtent,
-        1,
-        vk::ImageUsageFlagBits::eColorAttachment,
-        SMode,
-        FamilyIndices,
-        SwapchainSupport.capabilities.currentTransform,
-        vk::CompositeAlphaFlagBitsKHR::eOpaque,
-        PresentMode,
-        VK_TRUE};
-
-    m_swapchain = m_device.createSwapchainKHR(CreateInfo);
-    m_swapchainImages = m_device.getSwapchainImagesKHR(m_swapchain);
-  }
-
   void pickPhysicalDevice() {
     std::vector<vk::PhysicalDevice> Devices =
         m_instance.enumeratePhysicalDevices();
@@ -1069,7 +765,6 @@ private:
       throw std::runtime_error("failed to find a suitable GPU!");
 
     m_physicalDevice = *FindIt;
-    msaaSamples = getMaxUsableSampleCount();
   }
 
   // Checks which queue families are supported by the device and which one of
