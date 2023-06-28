@@ -26,6 +26,8 @@ class PlatformHandler final : public singleton<PlatformHandler> {
 
   DebugMessenger<PltBuilder::EnableDebug> DbgMsger;
 
+  // FIXME Why do we need each type as Optional and not whole collection as
+  // optional?
   template <typename VKType> using Optional = std::optional<VKType>;
 
   template <typename... Tys> using PackedTys = std::tuple<Optional<Tys>...>;
