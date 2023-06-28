@@ -86,29 +86,13 @@ class HelloTriangleApplication : gEng::UserWindow {
   gEng::Window m_Window;
 
   // Hom many frames can be processed concurrently.
-  const int MAX_FRAMES_IN_FLIGHT = 2;
+  static constexpr int MAX_FRAMES_IN_FLIGHT = 2;
 
   // TODO of course get rid of global code!.
-  // This vector is responsible for listing requires validation layers for
-  // debug.
-  std::vector<char const *> const m_validationLayers = {
-      "VK_LAYER_KHRONOS_validation"};
-  // This vector is responsible for listing requires device extensions.
-  // presentQueue by itself requires swapchain, so this is for
-  // explicit check.
-  std::vector<char const *> const m_deviceExtensions = {
-      VK_KHR_SWAPCHAIN_EXTENSION_NAME};
-#ifdef NDEBUG
-  bool const m_enableValidationLayers = false;
-#else
-  bool const m_enableValidationLayers = true;
-#endif
 
   // An instance needed for connection between app and VkLibrary
   // And adds a detailes about app to the driver
   vk::Instance m_instance;
-  // Member for a call back handling.
-  vk::DebugUtilsMessengerEXT m_debugMessenger;
   // Preferable device. Will be freed automatically.
   vk::PhysicalDevice m_physicalDevice;
   // Logical device.
@@ -118,10 +102,6 @@ class HelloTriangleApplication : gEng::UserWindow {
   vk::Queue m_graphicsQueue;
   // Presentation queue.
   vk::Queue m_presentQueue;
-  // Surface to be rendered in.
-  // It is actually platform-dependent, but glfw uses function which fills
-  // platform-specific structures by itself.
-  vk::SurfaceKHR m_surface{};
 
   gEng::ChainsManager Chains{};
   vk::SwapchainKHR m_swapchain{};
@@ -179,7 +159,7 @@ public:
     // TODO this is just to test GlbManager interface.
     auto &G = gEng::GlbManager::getInstance();
     G.registerEntity<int>(4);
-    std::cout << G.getEntity<int>();
+    std::cout << G.getEntity<int>() << '\n';
 
     initVulkan();
     mainLoop();
@@ -203,7 +183,6 @@ private:
     PltMgn.init(m_Window);
 
     m_instance = PltMgn.get<vk::Instance>();
-    m_surface = PltMgn.get<vk::SurfaceKHR>();
     m_physicalDevice = PltMgn.get<vk::PhysicalDevice>();
     m_device = PltMgn.get<vk::Device>();
     m_commandPool = PltMgn.get<vk::CommandPool>();
@@ -713,13 +692,6 @@ private:
     CmdBuff.end();
   }
 
-  void createCommandPool() {
-    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physicalDevice);
-    m_commandPool = m_device.createCommandPool(
-        {vk::CommandPoolCreateFlagBits::eResetCommandBuffer,
-         queueFamilyIndices.GraphicsFamily.value()});
-  }
-
   // Finds right type of memory to use.
   uint32_t findMemoryType(uint32_t TypeFilter,
                           vk::MemoryPropertyFlags Properties) {
@@ -732,267 +704,6 @@ private:
         return i;
 
     throw std::runtime_error("failed to find suitable memory type!");
-  }
-
-  void pickPhysicalDevice() {
-    std::vector<vk::PhysicalDevice> Devices =
-        m_instance.enumeratePhysicalDevices();
-
-    auto FindIt =
-        std::find_if(Devices.begin(), Devices.end(), [this](auto &&Device) {
-          return isDeviceSuitable(Device);
-        });
-    if (FindIt == Devices.end())
-      throw std::runtime_error("failed to find a suitable GPU!");
-
-    m_physicalDevice = *FindIt;
-  }
-
-  // Checks which queue families are supported by the device and which one of
-  // these supports the commands that we want to use.
-  struct QueueFamilyIndices {
-    // optional just because we may be want to select GPU with some family, but
-    // it is not strictly necessary.
-    std::optional<uint32_t> GraphicsFamily{};
-    // Not every device can support presentation of the image, so need to
-    // check that divece has proper family queue.
-    std::optional<uint32_t> PresentFamily{};
-
-    bool isComplete() {
-      return GraphicsFamily.has_value() && PresentFamily.has_value();
-    }
-  };
-
-  // Swapchain requires more details to be checked.
-  // - basic surface capabilities.
-  // - surface format (pixel format, color space).
-  // - available presentation mode.
-  struct SwapchainSupportDetails {
-    vk::SurfaceCapabilitiesKHR capabilities;
-    std::vector<vk::SurfaceFormatKHR> formats;
-    std::vector<vk::PresentModeKHR> presentModes;
-  };
-
-  // This section covers how to query the structs that include this information.
-  SwapchainSupportDetails
-  querySwapchainSupport(vk::PhysicalDevice const &Device) {
-    return SwapchainSupportDetails{
-        .capabilities = Device.getSurfaceCapabilitiesKHR(m_surface),
-        .formats = Device.getSurfaceFormatsKHR(m_surface),
-        .presentModes = Device.getSurfacePresentModesKHR(m_surface)};
-  }
-
-  QueueFamilyIndices findQueueFamilies(vk::PhysicalDevice const &Device) {
-    QueueFamilyIndices Indices;
-    std::vector<vk::QueueFamilyProperties> QueueFamilies =
-        Device.getQueueFamilyProperties();
-
-    // TODO: rething this approach.
-    uint32_t i{0};
-    for (auto &&queueFamily : QueueFamilies) {
-      // For better performance one queue family has to support all requested
-      // queues at once, but we also can treat them as different families for
-      // unified approach.
-      if (queueFamily.queueFlags & vk::QueueFlagBits::eGraphics)
-        Indices.GraphicsFamily = i;
-
-      // Checks for presentation family support.
-      if (Device.getSurfaceSupportKHR(i, m_surface))
-        Indices.PresentFamily = i;
-
-      // Not quite sure why the hell we need this early-break.
-      if (Indices.isComplete())
-        return Indices;
-      ++i;
-    }
-
-    return QueueFamilyIndices{};
-  }
-
-  // We want to select format.
-  vk::SurfaceFormatKHR chooseSwapSurfaceFormat(
-      std::vector<vk::SurfaceFormatKHR> const &AvailableFormats) {
-    // Some words in Swap chain part:
-    // https://vulkan-tutorial.com/Drawing_a_triangle/Presentation/Swap_chain
-    auto FindIt = std::find_if(
-        AvailableFormats.begin(), AvailableFormats.end(), [](auto &&Format) {
-          return Format.format == vk::Format::eB8G8R8A8Srgb &&
-                 Format.colorSpace == vk::ColorSpaceKHR::eSrgbNonlinear;
-        });
-    if (FindIt != AvailableFormats.end())
-      return *FindIt;
-
-    std::cout << "The best format unavailable.\nUse available one.\n";
-    return AvailableFormats[0];
-  }
-
-  // Presentation mode represents the actual conditions for showing images to
-  // the screen.
-  vk::PresentModeKHR chooseSwapPresentMode(
-      std::vector<vk::PresentModeKHR> const &AvailablePresentModes) {
-    auto FindIt =
-        std::find_if(AvailablePresentModes.begin(), AvailablePresentModes.end(),
-                     [](auto &&PresentMode) {
-                       return PresentMode == vk::PresentModeKHR::eMailbox;
-                     });
-    if (FindIt != AvailablePresentModes.end())
-      return *FindIt;
-
-    return vk::PresentModeKHR::eFifo;
-  }
-
-  // glfwWindows works with screen-coordinates. But Vulkan - with pixels.
-  // And not always they are corresponsible with each other.
-  // So we want to create a proper resolution.
-  vk::Extent2D
-  chooseSwapExtent(vk::SurfaceCapabilitiesKHR const &Capabilities) {
-    if (Capabilities.currentExtent.width != UINT32_MAX)
-      return Capabilities.currentExtent;
-    else {
-      // TODO. maybe updExtent
-      auto [Width, Height] = m_Window.getExtent();
-      uint32_t const RealW =
-          std::clamp(Width, Capabilities.minImageExtent.width,
-                     Capabilities.maxImageExtent.width);
-      uint32_t const RealH =
-          std::clamp(Height, Capabilities.minImageExtent.height,
-                     Capabilities.maxImageExtent.height);
-      return {RealW, RealH};
-    }
-  }
-
-  // Checks if device is suitable for our extensions and purposes.
-  bool isDeviceSuitable(vk::PhysicalDevice const &Device) {
-    // name, type, supported Vulkan version can be quired via
-    // GetPhysicalDeviceProperties.
-    // vk::PhysicalDeviceProperties DeviceProps = Device.getProperties();
-
-    // optional features like texture compressing, 64bit floating operations,
-    // multiview-port and so one...
-    vk::PhysicalDeviceFeatures DeviceFeat = Device.getFeatures();
-
-    // Right now I have only one INTEGRATED GPU(on linux). But it will be more
-    // suitable to calculate score and select preferred GPU with the highest
-    // score. (eg. discrete GPU has +1000 score..)
-
-    // Swap chain support is sufficient for this tutorial if there is at least
-    // one supported image format and one supported presentation mode given
-    // the window surface we have.
-    auto swapchainSupport = [](SwapchainSupportDetails swapchainDetails) {
-      return !swapchainDetails.formats.empty() &&
-             !swapchainDetails.presentModes.empty();
-    };
-
-    // But we want to find out if GPU is graphicFamily. (?)
-    return findQueueFamilies(Device).isComplete() &&
-           checkDeviceExtensionSupport(Device) &&
-           swapchainSupport(querySwapchainSupport(Device)) &&
-           DeviceFeat.samplerAnisotropy;
-    // All three ckecks are different. WTF!
-  }
-
-  bool checkDeviceExtensionSupport(vk::PhysicalDevice const &Device) {
-    // Some bad code. Rethink!
-    std::vector<vk::ExtensionProperties> AvailableExtensions =
-        Device.enumerateDeviceExtensionProperties();
-    std::unordered_set<std::string_view> UniqieExt;
-    std::for_each(AvailableExtensions.begin(), AvailableExtensions.end(),
-                  [&UniqieExt](auto &&Extension) {
-                    UniqieExt.insert(Extension.extensionName);
-                  });
-    return std::all_of(m_deviceExtensions.begin(), m_deviceExtensions.end(),
-                       [&UniqieExt](char const *RequireExt) {
-                         return UniqieExt.contains(RequireExt);
-                       });
-  }
-
-  vk::DebugUtilsMessengerCreateInfoEXT populateDebugMessengerInfo() {
-    using MessageSeverity = vk::DebugUtilsMessageSeverityFlagBitsEXT;
-    using MessageType = vk::DebugUtilsMessageTypeFlagBitsEXT;
-    return {{},
-            MessageSeverity::eVerbose | MessageSeverity::eWarning |
-                MessageSeverity::eError,
-            MessageType::eGeneral | MessageType::ePerformance |
-                MessageType::eValidation,
-            debugCallback};
-  }
-
-  void setupDebugMessenger() {
-    if (!m_enableValidationLayers)
-      return;
-
-    m_debugMessenger =
-        m_instance.createDebugUtilsMessengerEXT(populateDebugMessengerInfo());
-  }
-
-  std::vector<char const *> getRequiredExtensions() {
-    uint32_t ExtensionCount{};
-    const char **Extensions =
-        glfwGetRequiredInstanceExtensions(&ExtensionCount);
-
-    std::vector<const char *> AllExtensions{Extensions,
-                                            Extensions + ExtensionCount};
-    // Addition for callback.
-    if (m_enableValidationLayers)
-      AllExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-
-    return AllExtensions;
-  }
-
-  void createInstance() {
-    // TODO believe this logic has to be moved somewhere to call constructor of
-    // m_instance only once, fe: m_instance{createInstance}.
-    if (m_enableValidationLayers && !checkValidationLayers())
-      throw std::runtime_error{
-          "Requestred validation layers are not available!"};
-
-    vk::ApplicationInfo AppInfo{"Hello triangle", VK_MAKE_VERSION(1, 0, 0),
-                                "No Engine", VK_MAKE_VERSION(1, 0, 0),
-                                VK_API_VERSION_1_0};
-
-    std::vector<char const *> Extensions{getRequiredExtensions()};
-    std::vector<char const *> const &Layers = m_enableValidationLayers
-                                                  ? m_validationLayers
-                                                  : std::vector<char const *>{};
-
-    vk::InstanceCreateInfo CreateInfo{{}, &AppInfo, Layers, Extensions};
-
-    vk::DebugUtilsMessengerCreateInfoEXT DebugCreateInfo =
-        m_enableValidationLayers ? populateDebugMessengerInfo()
-                                 : vk::DebugUtilsMessengerCreateInfoEXT{};
-    if (m_enableValidationLayers)
-      CreateInfo.setPNext(&DebugCreateInfo);
-
-    m_instance = vk::createInstance(CreateInfo);
-  }
-
-  // Checks if all requested layers are available.
-  bool checkValidationLayers() {
-    auto AvailableLayers = vk::enumerateInstanceLayerProperties();
-    std::unordered_set<std::string_view> UniqueLayers;
-    std::for_each(AvailableLayers.begin(), AvailableLayers.end(),
-                  [&UniqueLayers](auto const &LayerProperty) {
-                    UniqueLayers.insert(LayerProperty.layerName);
-                  });
-    return std::all_of(m_validationLayers.begin(), m_validationLayers.end(),
-                       [&UniqueLayers](char const *RequireLayer) {
-                         return UniqueLayers.contains(RequireLayer);
-                       });
-  }
-
-  static VKAPI_ATTR VkBool32 VKAPI_CALL
-  debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-                VkDebugUtilsMessageTypeFlagsEXT messageType,
-                const VkDebugUtilsMessengerCallbackDataEXT *pCallbackData,
-                void *pUserData) {
-
-    // The way to control dumping  validation info.
-    if (messageSeverity >= VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT) {
-      // Message is important enough to show
-      std::cerr << "validation layer: " << pCallbackData->pMessage << std::endl;
-    }
-
-    return VK_FALSE;
   }
 
   void mainLoop() {
