@@ -15,6 +15,7 @@
 // BAD. just a placeholder
 #include "lib/environment/ChainsManager.h"
 #include "lib/environment/platform_handler.h"
+#include "lib/uniform_buffer/UniformBuffer.hpp"
 
 #include "shader/shader.h"
 #include "vertex.h"
@@ -71,12 +72,6 @@ void vkDestroyDebugUtilsMessengerEXT(VkInstance Instance,
   else
     std::cout << "ERR: debug is not destroyed!\n";
 }
-
-struct UniformBufferObject {
-  glm::mat4 model;
-  glm::mat4 view;
-  glm::mat4 proj;
-};
 
 // TODO. move Window in UserWindow.
 class HelloTriangleApplication : gEng::UserWindow {
@@ -248,7 +243,7 @@ private:
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
       vk::DescriptorBufferInfo BufInfo{uniformBuffers[i], 0,
-                                       sizeof(UniformBufferObject)};
+                                       gEng::UniformBuffer::Size};
       // TODO. move from loop.
       vk::DescriptorImageInfo ImgInfo{textureSampler, textureImageView,
                                       vk::ImageLayout::eShaderReadOnlyOptimal};
@@ -281,17 +276,17 @@ private:
   }
 
   void createUniformBuffers() {
-    vk::DeviceSize BuffSize = sizeof(UniformBufferObject);
-
     // TODO. rethink this approach.
     uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
     uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
 
-    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
-      std::tie(uniformBuffers[i], uniformBuffersMemory[i]) =
-          createBuffer(BuffSize, vk::BufferUsageFlagBits::eUniformBuffer,
-                       vk::MemoryPropertyFlagBits::eHostVisible |
-                           vk::MemoryPropertyFlagBits::eHostCoherent);
+    auto &PltMgr = gEng::PlatformHandler::getInstance();
+
+    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
+      gEng::UniformBuffer UB{PltMgr};
+      uniformBuffers[i] = UB.Buf;
+      uniformBuffersMemory[i] = UB.Mem;
+    }
   }
 
   void createVertexBuffer() {
@@ -376,17 +371,17 @@ private:
         std::chrono::duration<float, std::chrono::seconds::period>(CurrTime -
                                                                    StartTime)
             .count();
-    UniformBufferObject ubo{
-        .model = glm::rotate(glm::mat4(1.f), Time * glm::radians(90.f),
+    gEng::UniformBufferObject ubo{
+        .Model = glm::rotate(glm::mat4(1.f), Time * glm::radians(90.f),
                              glm::vec3(0.f, 0.f, 1.f)),
-        .view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f),
+        .View = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f),
                             glm::vec3(0.f, 0.f, 1.f)),
-        .proj =
+        .Proj =
             glm::perspective(glm::radians(45.f),
                              m_swapchainExtent.width /
                                  static_cast<float>(m_swapchainExtent.height),
                              0.1f, 10.f)};
-    ubo.proj[1][1] *= -1; // because GLM designed for OpenGL.
+    ubo.Proj[1][1] *= -1; // because GLM designed for OpenGL.
 
     auto const &Memory = uniformBuffersMemory[CurrImg];
     void *Data = m_device.mapMemory(Memory, 0, sizeof(ubo));
