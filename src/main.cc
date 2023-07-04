@@ -131,8 +131,8 @@ class HelloTriangleApplication : gEng::UserWindow {
   vk::Buffer IndexBuffer;
   vk::DeviceMemory IndexBufferMemory;
 
-  std::vector<vk::Buffer> uniformBuffers;
-  std::vector<vk::DeviceMemory> uniformBuffersMemory;
+  // FIXME optional to postpond call to constructor.
+  std::array<std::optional<gEng::UniformBuffer>, MAX_FRAMES_IN_FLIGHT> UBs;
 
   vk::DescriptorSetLayout descriptorSetLayout;
 
@@ -237,8 +237,7 @@ private:
     descriptorSets = m_device.allocateDescriptorSets({descriptorPool, Layouts});
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      vk::DescriptorBufferInfo BufInfo{uniformBuffers[i], 0,
-                                       gEng::UniformBuffer::Size};
+      auto BufInfo = UBs[i].value().getDescriptorBuffInfo();
       // TODO. move from loop.
       auto ImgInfo = Img.getDescriptorImgInfo();
 
@@ -270,17 +269,10 @@ private:
   }
 
   void createUniformBuffers() {
-    // TODO. rethink this approach.
-    uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-    uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-
     auto &PltMgr = gEng::PlatformHandler::getInstance();
-
-    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      gEng::UniformBuffer UB{PltMgr};
-      uniformBuffers[i] = UB.Buf;
-      uniformBuffersMemory[i] = UB.Mem;
-    }
+    // FIXME is where free memory during swapchain recreation?
+    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
+      UBs[i].emplace(PltMgr);
   }
 
   void createVertexBuffer() {
@@ -376,11 +368,7 @@ private:
                                  static_cast<float>(m_swapchainExtent.height),
                              0.1f, 10.f)};
     ubo.Proj[1][1] *= -1; // because GLM designed for OpenGL.
-
-    auto const &Memory = uniformBuffersMemory[CurrImg];
-    void *Data = m_device.mapMemory(Memory, 0, sizeof(ubo));
-    memcpy(Data, &ubo, sizeof(ubo));
-    m_device.unmapMemory(Memory);
+    UBs[CurrImg].value().load(ubo);
   }
 
   std::pair<vk::Buffer, vk::DeviceMemory>
@@ -531,16 +519,8 @@ private:
     currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
   }
 
-  void cleanupSwapchain() {
-    Chains.cleanup(m_device);
-    for (auto &&UniBuff : uniformBuffers)
-      m_device.destroyBuffer(UniBuff);
-    for (auto &&UniBuffMem : uniformBuffersMemory)
-      m_device.freeMemory(UniBuffMem);
-  }
-
   void cleanup() {
-    cleanupSwapchain();
+    Chains.cleanup(m_device);
 
     m_device.destroyDescriptorPool(descriptorPool);
     m_device.destroyDescriptorSetLayout(descriptorSetLayout);
