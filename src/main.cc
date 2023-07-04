@@ -15,6 +15,7 @@
 // BAD. just a placeholder
 #include "lib/environment/ChainsManager.h"
 #include "lib/environment/platform_handler.h"
+#include "lib/image/Image.h"
 #include "lib/uniform_buffer/UniformBuffer.hpp"
 
 #include "shader/shader.h"
@@ -22,7 +23,6 @@
 
 #include "gEng/environment.h"
 #include "gEng/global.h"
-#include "gEng/image.h"
 #include "gEng/window.h"
 
 #include <algorithm>
@@ -139,12 +139,8 @@ class HelloTriangleApplication : gEng::UserWindow {
   vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
-  uint32_t mipLevels;
-  vk::Image textureImage;
-  vk::DeviceMemory textureImageMemory;
+  gEng::Image Img;
 
-  vk::ImageView textureImageView;
-  vk::Sampler textureSampler;
 public:
   HelloTriangleApplication(gEng::SysEnv &InEH)
       : EH{InEH}, m_Window{1600u, 900u, "gEngine", this} {}
@@ -189,9 +185,8 @@ private:
 
     fs::path ImagePath{EH};
     ImagePath /= "assets/textures/viking_room.png";
-    gEng::Image Img(ImagePath.generic_string());
-    gEng::setImg(textureImage, textureImageMemory, mipLevels, textureImageView,
-                 textureSampler, Img);
+    Img.setImg(ImagePath.generic_string());
+
     loadModel();
     createVertexBuffer();
     createIndexBuffer();
@@ -245,8 +240,7 @@ private:
       vk::DescriptorBufferInfo BufInfo{uniformBuffers[i], 0,
                                        gEng::UniformBuffer::Size};
       // TODO. move from loop.
-      vk::DescriptorImageInfo ImgInfo{textureSampler, textureImageView,
-                                      vk::ImageLayout::eShaderReadOnlyOptimal};
+      auto ImgInfo = Img.getDescriptorImgInfo();
 
       vk::WriteDescriptorSet BufWrite{
           descriptorSets[i], 0,      0, vk::DescriptorType::eUniformBuffer,
@@ -547,12 +541,6 @@ private:
 
   void cleanup() {
     cleanupSwapchain();
-
-    m_device.destroySampler(textureSampler);
-    m_device.destroyImageView(textureImageView);
-
-    m_device.destroyImage(textureImage);
-    m_device.freeMemory(textureImageMemory);
 
     m_device.destroyDescriptorPool(descriptorPool);
     m_device.destroyDescriptorSetLayout(descriptorSetLayout);
