@@ -9,13 +9,11 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#define TINYOBJLOADER_IMPLEMENTATION
-#include <tiny_obj_loader.h>
-
 // BAD. just a placeholder
 #include "lib/environment/ChainsManager.h"
 #include "lib/environment/platform_handler.h"
 #include "lib/image/Image.h"
+#include "lib/model/Model.h"
 #include "lib/uniform_buffer/UniformBuffer.hpp"
 
 #include "shader/shader.h"
@@ -122,14 +120,7 @@ class HelloTriangleApplication : gEng::UserWindow {
 
   std::vector<vk::Fence> m_inFlightFence;
 
-  std::vector<Vertex> Vertices;
-  std::vector<uint32_t> Indices;
-
-  vk::Buffer VertexBuffer;
-  vk::DeviceMemory VertexBufferMemory;
-
-  vk::Buffer IndexBuffer;
-  vk::DeviceMemory IndexBufferMemory;
+  gEng::ModelVk M;
 
   // FIXME optional to postpond call to constructor.
   std::array<std::optional<gEng::UniformBuffer>, MAX_FRAMES_IN_FLIGHT> UBs;
@@ -187,47 +178,15 @@ private:
     ImagePath /= "assets/textures/viking_room.png";
     Img.setImg(ImagePath.generic_string());
 
-    loadModel();
-    createVertexBuffer();
-    createIndexBuffer();
+    fs::path ModelPath{EH};
+    ModelPath /= "assets/models/viking_room.obj";
+    M = gEng::Model{ModelPath.generic_string()};
+
     createUniformBuffers();
     createDescriptorPool();
     createDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
-  }
-
-  void loadModel() {
-    tinyobj::attrib_t attrib;
-    std::vector<tinyobj::shape_t> shapes;
-    std::vector<tinyobj::material_t> materials;
-    std::string warn, err;
-
-    fs::path ModelPath{EH};
-    ModelPath /= "assets/models/viking_room.obj";
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err,
-                          ModelPath.generic_string().c_str()))
-      throw std::runtime_error(warn + err);
-
-    // To avoid using Vertex duplications.
-    std::unordered_map<Vertex, uint32_t> uniqueVertices{};
-    for (auto const &shape : shapes)
-      for (auto const &index : shape.mesh.indices) {
-        Vertex vertex{};
-        vertex.Position = {attrib.vertices[3 * index.vertex_index + 0],
-                           attrib.vertices[3 * index.vertex_index + 1],
-                           attrib.vertices[3 * index.vertex_index + 2]};
-        vertex.TexCoord = {attrib.texcoords[2 * index.texcoord_index + 0],
-                           1.0f -
-                               attrib.texcoords[2 * index.texcoord_index + 1]};
-        vertex.Color = {1.0f, 1.0f, 1.0f};
-
-        if (uniqueVertices.count(vertex) == 0) {
-          uniqueVertices[vertex] = static_cast<uint32_t>(Vertices.size());
-          Vertices.push_back(vertex);
-        }
-        Indices.push_back(uniqueVertices[vertex]);
-      }
   }
 
   void createDescriptorSets() {
@@ -275,64 +234,6 @@ private:
       UBs[i].emplace(PltMgr);
   }
 
-  void createVertexBuffer() {
-    vk::DeviceSize BuffSize = sizeof(Vertex) * Vertices.size();
-
-    auto [StagingBuff, StagingBuffMem] =
-        createBuffer(BuffSize, vk::BufferUsageFlagBits::eTransferSrc,
-                     vk::MemoryPropertyFlagBits::eHostVisible |
-                         vk::MemoryPropertyFlagBits::eHostCoherent);
-
-    void *Data = m_device.mapMemory(StagingBuffMem, 0, BuffSize);
-    memcpy(Data, Vertices.data(), (size_t)BuffSize);
-    m_device.unmapMemory(StagingBuffMem);
-
-    std::tie(VertexBuffer, VertexBufferMemory) =
-        createBuffer(BuffSize,
-                     vk::BufferUsageFlagBits::eTransferDst |
-                         vk::BufferUsageFlagBits::eVertexBuffer,
-                     vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    copyBuffer(StagingBuff, VertexBuffer, BuffSize);
-
-    m_device.destroyBuffer(StagingBuff);
-    m_device.freeMemory(StagingBuffMem);
-  }
-
-  void createIndexBuffer() {
-    vk::DeviceSize BuffSize = sizeof(uint32_t) * Indices.size();
-
-    auto [StagingBuff, StagingBuffMem] =
-        createBuffer(BuffSize, vk::BufferUsageFlagBits::eTransferSrc,
-                     vk::MemoryPropertyFlagBits::eHostVisible |
-                         vk::MemoryPropertyFlagBits::eHostCoherent);
-    void *Data = m_device.mapMemory(StagingBuffMem, 0, BuffSize);
-    memcpy(Data, Indices.data(),
-           BuffSize); // TODO why just data == Indices.data()?
-    m_device.unmapMemory(StagingBuffMem);
-
-    std::tie(IndexBuffer, IndexBufferMemory) =
-        createBuffer(BuffSize,
-                     vk::BufferUsageFlagBits::eTransferDst |
-                         vk::BufferUsageFlagBits::eIndexBuffer,
-                     vk::MemoryPropertyFlagBits::eDeviceLocal);
-
-    copyBuffer(StagingBuff, IndexBuffer, BuffSize);
-
-    m_device.destroyBuffer(StagingBuff);
-    m_device.freeMemory(StagingBuffMem);
-  }
-
-  void copyBuffer(vk::Buffer Src, vk::Buffer Dst, vk::DeviceSize Size) {
-    // TODO. Maybe separate command pool is to be created for these kinds of
-    // short-lived buffers, because the implementation may be able to apply
-    // memory allocation optimizations. VK_COMMAND_POOL_CREATE_TRANSIENT_BIT for
-    // commandPool generation in that case.
-    auto &PltMgn = gEng::PlatformHandler::getInstance();
-    auto [SSTC, CmdBuff] = PltMgn.getSSTC();
-    CmdBuff.copyBuffer(Src, Dst, vk::BufferCopy{{}, {}, Size});
-  }
-
   // Creates new swap chain when smth goes wrong or resizing.
   void recreateSwapchain() {
     // Wait till proper size.
@@ -369,23 +270,6 @@ private:
                              0.1f, 10.f)};
     ubo.Proj[1][1] *= -1; // because GLM designed for OpenGL.
     UBs[CurrImg].value().load(ubo);
-  }
-
-  std::pair<vk::Buffer, vk::DeviceMemory>
-  createBuffer(vk::DeviceSize Size, vk::BufferUsageFlags Usage,
-               vk::MemoryPropertyFlags Properties) {
-    // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
-    // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
-    // queue family specially with TRANSFER_BIT.
-    vk::Buffer Buffer =
-        m_device.createBuffer({{}, Size, Usage, vk::SharingMode::eExclusive});
-    vk::MemoryRequirements MemReq =
-        m_device.getBufferMemoryRequirements(Buffer);
-    vk::DeviceMemory Memory = m_device.allocateMemory(
-        {MemReq.size, findMemoryType(MemReq.memoryTypeBits, Properties)});
-    m_device.bindBufferMemory(Buffer, Memory, 0);
-
-    return std::make_pair(Buffer, Memory);
   }
 
   void createSyncObjects() {
@@ -430,32 +314,18 @@ private:
     CmdBuff.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
     vk::DeviceSize Offsets{0};
-    CmdBuff.bindVertexBuffers(0, VertexBuffer, Offsets);
-    CmdBuff.bindIndexBuffer(IndexBuffer, 0, vk::IndexType::eUint32);
+    CmdBuff.bindVertexBuffers(0, M.getVB(), Offsets);
+    CmdBuff.bindIndexBuffer(M.getIB(), 0, vk::IndexType::eUint32);
 
     CmdBuff.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                m_pipelineLayout, 0,
                                descriptorSets[currentFrame], nullptr);
 
     // vertexCount, instanceCount, fitstVertex, firstInstance
-    CmdBuff.drawIndexed(Indices.size(), 1, 0, 0, 0);
+    CmdBuff.drawIndexed(M.getIndicesSize(), 1, 0, 0, 0);
 
     CmdBuff.endRenderPass();
     CmdBuff.end();
-  }
-
-  // Finds right type of memory to use.
-  uint32_t findMemoryType(uint32_t TypeFilter,
-                          vk::MemoryPropertyFlags Properties) {
-    vk::PhysicalDeviceMemoryProperties MemProps =
-        m_physicalDevice.getMemoryProperties();
-
-    for (uint32_t i = 0; i != MemProps.memoryTypeCount; ++i)
-      if ((TypeFilter & (1 << i)) &&
-          (MemProps.memoryTypes[i].propertyFlags & Properties) == Properties)
-        return i;
-
-    throw std::runtime_error("failed to find suitable memory type!");
   }
 
   void mainLoop() {
@@ -524,10 +394,6 @@ private:
 
     m_device.destroyDescriptorPool(descriptorPool);
     m_device.destroyDescriptorSetLayout(descriptorSetLayout);
-    m_device.destroyBuffer(VertexBuffer);
-    m_device.freeMemory(VertexBufferMemory);
-    m_device.destroyBuffer(IndexBuffer);
-    m_device.freeMemory(IndexBufferMemory);
 
     for (auto &&Sem : m_renderFinishedSemaphore)
       m_device.destroySemaphore(Sem);

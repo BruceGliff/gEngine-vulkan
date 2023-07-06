@@ -3,8 +3,8 @@
 using namespace gEng;
 
 // Finds right type of memory to use.
-uint32_t findMemoryType(vk::PhysicalDevice PhysDev, uint32_t TypeFilter,
-                        vk::MemoryPropertyFlags Properties) {
+static uint32_t findMemoryType(vk::PhysicalDevice PhysDev, uint32_t TypeFilter,
+                               vk::MemoryPropertyFlags Properties) {
   vk::PhysicalDeviceMemoryProperties MemProps = PhysDev.getMemoryProperties();
 
   for (uint32_t i = 0; i != MemProps.memoryTypeCount; ++i)
@@ -17,10 +17,10 @@ uint32_t findMemoryType(vk::PhysicalDevice PhysDev, uint32_t TypeFilter,
 
 // FIXME use commit history to find previous (non-working) impl.
 // and try to fix it.
-template <>
-BufferBuilder::Type BufferBuilder::create<BufferBuilder::Type>(
-    vk::DeviceSize Size, vk::BufferUsageFlagBits Usage,
-    vk::Flags<vk::MemoryPropertyFlagBits> Properties) {
+BufferBuilder::Type
+BufferBuilder::create(vk::DeviceSize Size,
+                      vk::Flags<vk::MemoryPropertyFlagBits> Usage,
+                      vk::Flags<vk::MemoryPropertyFlagBits> Properties) const {
   // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
   // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
   // queue family specially with TRANSFER_BIT.

@@ -19,6 +19,7 @@ struct ImageBuilder : BuilderInterface<ImageBuilder> {
 
   void transitionImageLayout(PlatformHandler const &, vk::Image, vk::Format,
                              vk::ImageLayout, vk::ImageLayout, uint32_t);
+
   template <typename T, typename... Args> T create(Args... args);
 };
 

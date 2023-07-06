@@ -22,6 +22,8 @@ struct Vertex {
   static vk::VertexInputBindingDescription getBindDescription();
   static AttrDescr<3> getAttrDescription();
 
+  static constexpr auto size() { return sizeof(Vertex); }
+
   // For using as key in unordered_map.
   bool operator==(const Vertex &other) const;
 };
