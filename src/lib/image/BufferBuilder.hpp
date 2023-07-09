@@ -2,6 +2,7 @@
 
 #include "../environment/platform_handler.h"
 #include "../utils/BuilderInterface.hpp"
+#include "BufferWithMemory.h"
 
 #include <vulkan/vulkan.hpp>
 
@@ -10,44 +11,37 @@ namespace gEng {
 struct BufferBuilder : BuilderInterface<BufferBuilder> {
   friend BuilderInterface<BufferBuilder>;
 
-  using Type = std::pair<vk::Buffer, vk::DeviceMemory>;
+  using Type = BufferWithMemory;
 
   vk::Device Dev;
   vk::PhysicalDevice PhysDev;
   BufferBuilder(vk::Device Dev, vk::PhysicalDevice PhysDev)
       : Dev{Dev}, PhysDev{PhysDev} {}
 
-  Type create(vk::DeviceSize, vk::Flags<vk::MemoryPropertyFlagBits>,
-              vk::Flags<vk::MemoryPropertyFlagBits>) const;
+  Type create(vk::DeviceSize Size, vk::BufferUsageFlags Usage,
+              vk::MemoryPropertyFlags Properties) const;
 
   template <typename Data>
-  Type
-  createViaStaging(Data &&D, vk::Flags<vk::MemoryPropertyFlagBits>,
-                   vk::Flags<vk::MemoryPropertyFlagBits> Properties) const {
-    auto const Size = D.size();
+  Type createViaStaging(Data &&D, vk::BufferUsageFlags Usage,
+                        vk::MemoryPropertyFlags Properties) const {
+    using ValueTy = typename std::remove_reference_t<Data>::value_type;
+    auto const Size = D.size() * sizeof(ValueTy);
     auto const *Src = D.data();
-    auto [StagingBuff, StagingBuffMem] = create<BufferBuilder::Type>(
-        Size, vk::BufferUsageFlagBits::eTransferSrc,
-        vk::MemoryPropertyFlagBits::eHostVisible |
-            vk::MemoryPropertyFlagBits::eHostCoherent);
+    auto Staging = create(Size, vk::BufferUsageFlagBits::eTransferSrc,
+                          vk::MemoryPropertyFlagBits::eHostVisible |
+                              vk::MemoryPropertyFlagBits::eHostCoherent);
 
-    void *Mmr = Dev.mapMemory(StagingBuffMem, 0, Size);
-    std::memcpy(Mmr, Src, Size);
-    Dev.unmapMemory(StagingBuffMem);
+    Staging.store(Src, Size);
 
-    auto BufMem =
-        create<BufferBuilder::Type>(Size,
-                                    vk::BufferUsageFlagBits::eTransferDst |
-                                        vk::BufferUsageFlagBits::eVertexBuffer,
-                                    vk::MemoryPropertyFlagBits::eDeviceLocal);
+    auto BufMem = create(Size, Usage, Properties);
 
     auto &PltMgn = PlatformHandler::getInstance();
     auto [SSRC, CmdBuff] = PltMgn.getSSTC();
-    CmdBuff.copyBuffer(StagingBuff, std::get<vk::Buffer>(BufMem),
+    CmdBuff.copyBuffer(Staging.Buffer, BufMem.Buffer,
                        vk::BufferCopy{{}, {}, Size});
-
-    Dev.destroyBuffer(StagingBuff);
-    Dev.freeMemory(StagingBuffMem);
+    // Here quite tricky as in ~SSRC job emiter calls and at this point
+    // all buffers should be consistent. But alse here ~Staging calls,
+    // Which frees memory.
     return BufMem;
   }
 };

@@ -269,7 +269,7 @@ private:
                                  static_cast<float>(m_swapchainExtent.height),
                              0.1f, 10.f)};
     ubo.Proj[1][1] *= -1; // because GLM designed for OpenGL.
-    UBs[CurrImg].value().load(ubo);
+    UBs[CurrImg].value().store(ubo);
   }
 
   void createSyncObjects() {

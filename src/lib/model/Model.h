@@ -39,20 +39,12 @@ struct ModelVk final {
   ModelVk() = default;
 
   // TODO temporary
-  auto getVB() const { return std::get<vk::Buffer>(VB); }
-  auto getIB() const { return std::get<vk::Buffer>(IB); }
+  auto getVB() const { return VB.Buffer; }
+  auto getIB() const { return IB.Buffer; }
   auto getIndicesSize() const { return M.get<Model::Indices>().size(); }
-
-  ~ModelVk() {
-    Dev.destroyBuffer(std::get<vk::Buffer>(VB));
-    Dev.freeMemory(std::get<vk::DeviceMemory>(VB));
-    Dev.destroyBuffer(std::get<vk::Buffer>(IB));
-    Dev.freeMemory(std::get<vk::DeviceMemory>(IB));
-  }
 
 private:
   Model M;
-  vk::Device Dev;
   BufferBuilder::Type VB;
   BufferBuilder::Type IB;
   void initBuf();

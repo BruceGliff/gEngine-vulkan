@@ -119,13 +119,11 @@ static auto getHandles(void *RawData, uint32_t Width, uint32_t Height,
   using MP = vk::MemoryPropertyFlagBits;
   using BU = vk::BufferUsageFlagBits;
   using IU = vk::ImageUsageFlagBits;
-  auto [StagingBuff, StagingBuffMem] = BB.create<BufferBuilder::Type>(
-      vk::DeviceSize{Size}, BU::eTransferSrc,
-      vk::MemoryPropertyFlags{MP::eHostVisible | MP::eHostCoherent});
+  auto Staging =
+      BB.create(vk::DeviceSize{Size}, BU::eTransferSrc,
+                vk::MemoryPropertyFlags{MP::eHostVisible | MP::eHostCoherent});
 
-  void *Data = Dev.mapMemory(StagingBuffMem, 0, Size);
-  memcpy(Data, RawData, Size);
-  Dev.unmapMemory(StagingBuffMem);
+  Staging.store(RawData, Size);
 
   auto const MIPlvl =
       static_cast<uint32_t>(std::floor(std::log2(std::max(Width, Height)))) + 1;
@@ -140,13 +138,10 @@ static auto getHandles(void *RawData, uint32_t Width, uint32_t Height,
                            vk::ImageLayout::eUndefined,
                            vk::ImageLayout::eTransferDstOptimal, MIPlvl);
 
-  copyBufferToImage(PltMgn, StagingBuff, Img, Width, Height);
+  copyBufferToImage(PltMgn, Staging.Buffer, Img, Width, Height);
   // Transitioning to SHADER_READ_ONLY while generating mipmaps.
   generateMipmaps(PltMgn, Img, vk::Format::eR8G8B8A8Srgb, Width, Height,
                   MIPlvl);
-
-  Dev.destroyBuffer(StagingBuff);
-  Dev.freeMemory(StagingBuffMem);
 
   // FIXME move it to builder!
   // createTextureImageView();

@@ -46,29 +46,25 @@ static Model::DataTy loadModel(std::string_view Path) {
 Model::Model(std::string_view Path) : Model(loadModel(Path)) {}
 
 // Data - smth with size(), data().
-static auto getDeviceBuffer(auto &&Data) {
-  using ValueTy = typename std::remove_reference_t<decltype(Data)>::value_type;
+static auto getDeviceBuffer(auto &&Data, auto BufferUsage) {
   auto &PltMgr = PlatformHandler::getInstance();
   BufferBuilder B{PltMgr.get<vk::Device>(), PltMgr.get<vk::PhysicalDevice>()};
-  auto Size = Data.size() * sizeof(ValueTy);
-  return B.createViaStaging<BufferBuilder::Type>(
-      Size, Data.data(),
-      vk::BufferUsageFlagBits::eTransferDst |
-          vk::BufferUsageFlagBits::eVertexBuffer,
-      vk::MemoryPropertyFlagBits::eDeviceLocal);
+  return B.createViaStaging(Data,
+                            vk::BufferUsageFlagBits::eTransferDst | BufferUsage,
+                            vk::MemoryPropertyFlagBits::eDeviceLocal);
 }
 
 void ModelVk::initBuf() {
-  Dev = PlatformHandler::getInstance().get<vk::Device>();
-  VB = getDeviceBuffer(M.get<Model::Vertices>());
-  IB = getDeviceBuffer(M.get<Model::Indices>());
+  VB = getDeviceBuffer(M.get<Model::Vertices>(),
+                       vk::BufferUsageFlagBits::eVertexBuffer);
+  IB = getDeviceBuffer(M.get<Model::Indices>(),
+                       vk::BufferUsageFlagBits::eIndexBuffer);
 }
 
 // For Initialization once.
 #if 0
   ModelVk::ModelVk(Model &&M)
     : M{std::move(M)}
-    , Dev{PlatformHandler::getInstance().get<vk::Device>()}
     , VB{getDeviceBuffer(M.get<Model::Vertices>())}
     , IB{getDeviceBuffer(M.get<Model::Indices>())}
          {}

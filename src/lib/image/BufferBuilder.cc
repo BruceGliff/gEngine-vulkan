@@ -18,9 +18,8 @@ static uint32_t findMemoryType(vk::PhysicalDevice PhysDev, uint32_t TypeFilter,
 // FIXME use commit history to find previous (non-working) impl.
 // and try to fix it.
 BufferBuilder::Type
-BufferBuilder::create(vk::DeviceSize Size,
-                      vk::Flags<vk::MemoryPropertyFlagBits> Usage,
-                      vk::Flags<vk::MemoryPropertyFlagBits> Properties) const {
+BufferBuilder::create(vk::DeviceSize Size, vk::BufferUsageFlags Usage,
+                      vk::MemoryPropertyFlags Properties) const {
   // TODO for transfering VK_QUEUE_TRANSFER_BIT is needed, but it included in
   // VK_QUEUE_GRAPHICS_BIT or COMPUTE_BIT. But it would be nice to create
   // queue family specially with TRANSFER_BIT.
@@ -32,5 +31,5 @@ BufferBuilder::create(vk::DeviceSize Size,
        findMemoryType(PhysDev, MemReq.memoryTypeBits, Properties)});
   Dev.bindBufferMemory(Buffer, Memory, 0);
 
-  return std::make_pair(Buffer, Memory);
+  return Type{Buffer, Memory, Dev};
 }
