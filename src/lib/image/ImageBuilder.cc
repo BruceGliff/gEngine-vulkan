@@ -14,7 +14,7 @@ void ImageBuilder::transitionImageLayout(PlatformHandler const &PltMgn,
                                          vk::ImageLayout OldLayout,
                                          vk::ImageLayout NewLayout,
                                          uint32_t MipLvls) {
-  auto [SSTC, CmdBuffer] = PltMgn.getSSTC();
+  auto CmdBuffer = PltMgn.getSSTC();
 
   vk::ImageMemoryBarrier Barrier{
       {}, {}, OldLayout, NewLayout,

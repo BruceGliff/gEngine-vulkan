@@ -30,7 +30,7 @@ loadRawImg(std::string_view Path) {
 static void copyBufferToImage(PlatformHandler const &PltMgn, vk::Buffer Buffer,
                               vk::Image Image, uint32_t Width,
                               uint32_t Height) {
-  auto [SSTC, CmdBuff] = PltMgn.getSSTC();
+  auto CmdBuff = PltMgn.getSSTC();
 
   vk::BufferImageCopy Reg{0,         0,
                           0,         {vk::ImageAspectFlagBits::eColor, 0, 0, 1},
@@ -51,7 +51,7 @@ static void generateMipmaps(PlatformHandler const &PltMgr, vk::Image Img,
     throw std::runtime_error(
         "texture image format does not support linear blitting!");
 
-  auto [SSTC, CmdBuff] = PltMgr.getSSTC();
+  auto CmdBuff = PltMgr.getSSTC();
 
   vk::ImageMemoryBarrier Barrier{
       {}, {}, {},  {},

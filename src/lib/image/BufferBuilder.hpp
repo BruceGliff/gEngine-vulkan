@@ -36,7 +36,7 @@ struct BufferBuilder : BuilderInterface<BufferBuilder> {
     auto BufMem = create(Size, Usage, Properties);
 
     auto &PltMgn = PlatformHandler::getInstance();
-    auto [SSRC, CmdBuff] = PltMgn.getSSTC();
+    auto CmdBuff = PltMgn.getSSTC();
     CmdBuff.copyBuffer(Staging.Buffer, BufMem.Buffer,
                        vk::BufferCopy{{}, {}, Size});
     // Here quite tricky as in ~SSRC job emiter calls and at this point

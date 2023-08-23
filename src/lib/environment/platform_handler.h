@@ -43,51 +43,37 @@ class PlatformHandler final : public singleton<PlatformHandler> {
     return std::get<std::optional<T>>(C);
   }
 
-  class SSTCImpl final {
+  // Class is vk::CommandBuffer but with default resource release on destructor.
+  class ScopeSingleTimeCommandBufferImpl final : public vk::CommandBuffer {
     vk::Device Dev;
     vk::CommandPool CmdPool;
     // GraphicQueue
     vk::Queue Queue;
 
-    bool ShouldDelete{true};
+    static vk::CommandBuffer allocCmdBuf(vk::Device Dev,
+                                         vk::CommandPool CmdPool) {
+      return Dev
+          .allocateCommandBuffers(
+              {CmdPool, vk::CommandBufferLevel::ePrimary, 1})
+          .front();
+    }
 
   public:
-    vk::CommandBuffer CmdBuf;
-
-    SSTCImpl(vk::Device Dev, vk::CommandPool CmdPool, vk::Queue Queue)
-        : Dev{Dev}, CmdPool{CmdPool}, Queue{Queue} {
-      CmdBuf = Dev.allocateCommandBuffers(
-                      {CmdPool, vk::CommandBufferLevel::ePrimary, 1})
-                   .front();
-      CmdBuf.begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
+    ScopeSingleTimeCommandBufferImpl(vk::Device Dev, vk::CommandPool CmdPool,
+                                     vk::Queue Queue)
+        : vk::CommandBuffer{allocCmdBuf(Dev, CmdPool)}, Dev{Dev},
+          CmdPool{CmdPool}, Queue{Queue} {
+      begin({vk::CommandBufferUsageFlagBits::eOneTimeSubmit});
     }
-    // These std::move do not do much, but only for observing let them stay.
-    SSTCImpl(SSTCImpl &&Other)
-        : Dev{std::move(Other.Dev)}, CmdPool{std::move(Other.CmdPool)},
-          Queue{std::move(Other.Queue)}, CmdBuf{std::move(Other.CmdBuf)} {
-      Other.ShouldDelete = false;
-    }
-
-    SSTCImpl(SSTCImpl const &) = delete;
-    SSTCImpl &operator=(SSTCImpl const &) = delete;
-    SSTCImpl &operator=(SSTCImpl &&) = delete;
-
-    ~SSTCImpl() {
-      if (!ShouldDelete)
-        return;
-      CmdBuf.end();
+    ScopeSingleTimeCommandBufferImpl(ScopeSingleTimeCommandBufferImpl const &) =
+        delete;
+    ~ScopeSingleTimeCommandBufferImpl() {
+      end();
+      vk::CommandBuffer CmdBuf{*this};
       Queue.submit(vk::SubmitInfo{}.setCommandBuffers(CmdBuf));
       Queue.waitIdle();
       Dev.freeCommandBuffers(CmdPool, CmdBuf);
     }
-  };
-
-  class ScopedSingleTimeCmd final {
-    SSTCImpl Impl;
-
-  public:
-    ScopedSingleTimeCmd(SSTCImpl &&Impl) : Impl{std::move(Impl)} {}
-    using LinkedTy = std::pair<ScopedSingleTimeCmd, vk::CommandBuffer>;
   };
 
 public:
@@ -115,14 +101,10 @@ public:
     throw std::runtime_error{"Platform not initiated\n"};
   }
 
-  // This Function returns Scoped class which calls Destructor to release
-  // resources and returns vk::CommandBuffer, linked with Scoped class.
-  ScopedSingleTimeCmd::LinkedTy getSSTC() const {
-    SSTCImpl Impl{get<vk::Device>(), get<vk::CommandPool>(),
-                  get<gEng::detail::GraphPresentQ>().first};
-    auto CmdBuf = Impl.CmdBuf;
-    return std::make_pair<ScopedSingleTimeCmd, vk::CommandBuffer>(
-        std::move(Impl), std::move(CmdBuf));
+  auto getSSTC() const {
+    return ScopeSingleTimeCommandBufferImpl{
+        get<vk::Device>(), get<vk::CommandPool>(),
+        get<gEng::detail::GraphPresentQ>().first};
   }
 };
 
