@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "../image/BufferBuilder.hpp"
+#include "../shader/DrawShader.hpp"
 #include <vertex.h>
 
 namespace gEng {
@@ -45,6 +46,7 @@ struct ModelVk final {
 
 private:
   Model M;
+  DrawShader Shader;
   BufferBuilder::Type VB;
   BufferBuilder::Type IB;
   void initBuf();

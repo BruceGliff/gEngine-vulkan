@@ -10,6 +10,8 @@
 // TODO make SysEnv global singleton
 #include "gEng/environment.h"
 
+#include "../config/config.hpp"
+
 using namespace gEng;
 
 // Presentation mode represents the actual conditions for showing images to
@@ -272,6 +274,31 @@ ChainsBuilder::create<vk::DescriptorSetLayout>(PlatformHandler const &PltMgr) {
       LayoutBindingUBO, LayoutBindingSampler};
 
   return Dev.createDescriptorSetLayout({{}, Bindings});
+}
+
+template <>
+vk::DescriptorPool
+ChainsBuilder::create<vk::DescriptorPool>(PlatformHandler const &PltMgr) {
+  auto Dev = PltMgr.get<vk::Device>();
+  constexpr auto Frames = Config::FInF;
+
+  std::array<vk::DescriptorPoolSize, 2> PoolSizes = {
+      vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, Frames},
+      vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler,
+                             Frames}};
+  return Dev.createDescriptorPool({{}, Frames, PoolSizes});
+}
+
+template <>
+std::vector<vk::DescriptorSet>
+ChainsBuilder::create<std::vector<vk::DescriptorSet>>(
+    PlatformHandler const &PltMgr, vk::DescriptorPool &DP,
+    vk::DescriptorSetLayout &DSL) {
+  auto Dev = PltMgr.get<vk::Device>();
+  constexpr auto Frames = Config::FInF;
+
+  std::vector<vk::DescriptorSetLayout> Layouts(Frames, DSL);
+  return Dev.allocateDescriptorSets({DP, Layouts});
 }
 
 template <>

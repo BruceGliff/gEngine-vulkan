@@ -125,8 +125,6 @@ class HelloTriangleApplication : gEng::UserWindow {
   // FIXME optional to postpond call to constructor.
   std::array<std::optional<gEng::UniformBuffer>, MAX_FRAMES_IN_FLIGHT> UBs;
 
-  vk::DescriptorSetLayout descriptorSetLayout;
-
   vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
@@ -152,7 +150,6 @@ private:
     m_swapchain = Chains.getSwapchain();
     m_swapchainExtent = Chains.getExtent();
     m_renderPass = Chains.getRPass();
-    descriptorSetLayout = Chains.getDSL();
     m_pipelineLayout = Chains.getPPL();
     m_graphicsPipeline = Chains.getP();
 
@@ -189,17 +186,8 @@ private:
   }
 
   void createDescriptorPoolAndSets() {
-    uint32_t const Frames = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-    std::array<vk::DescriptorPoolSize, 2> PoolSizes = {
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, Frames},
-        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler,
-                               Frames}};
-    descriptorPool = m_device.createDescriptorPool({{}, Frames, PoolSizes});
-    std::vector<vk::DescriptorSetLayout> Layouts(MAX_FRAMES_IN_FLIGHT,
-                                                 descriptorSetLayout);
-
-    descriptorSets = m_device.allocateDescriptorSets({descriptorPool, Layouts});
+    descriptorPool = Chains.getDPool();
+    descriptorSets = Chains.getDSet();
 
     for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
       auto BufInfo = UBs[i].value().getDescriptorBuffInfo();
@@ -219,6 +207,8 @@ private:
       std::array<vk::WriteDescriptorSet, 2> descriptorWrites{
           std::move(BufWrite), std::move(ImgWrite)};
 
+      // I think this update should occure each frame:
+      // https://vulkan.lunarg.com/doc/view/latest/windows/tutorial/html/08-init_pipeline_layout.html
       m_device.updateDescriptorSets(descriptorWrites, nullptr);
     }
   }
@@ -386,9 +376,6 @@ private:
 
   void cleanup() {
     Chains.cleanup(m_device);
-
-    m_device.destroyDescriptorPool(descriptorPool);
-    m_device.destroyDescriptorSetLayout(descriptorSetLayout);
 
     for (auto &&Sem : m_renderFinishedSemaphore)
       m_device.destroySemaphore(Sem);
