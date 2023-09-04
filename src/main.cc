@@ -183,13 +183,19 @@ private:
     M = gEng::Model{ModelPath.generic_string()};
 
     createUniformBuffers();
-    createDescriptorPool();
-    createDescriptorSets();
+    createDescriptorPoolAndSets();
     createCommandBuffers();
     createSyncObjects();
   }
 
-  void createDescriptorSets() {
+  void createDescriptorPoolAndSets() {
+    uint32_t const Frames = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+
+    std::array<vk::DescriptorPoolSize, 2> PoolSizes = {
+        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, Frames},
+        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler,
+                               Frames}};
+    descriptorPool = m_device.createDescriptorPool({{}, Frames, PoolSizes});
     std::vector<vk::DescriptorSetLayout> Layouts(MAX_FRAMES_IN_FLIGHT,
                                                  descriptorSetLayout);
 
@@ -217,16 +223,6 @@ private:
     }
   }
 
-  void createDescriptorPool() {
-    uint32_t const Frames = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-
-    std::array<vk::DescriptorPoolSize, 2> PoolSizes = {
-        vk::DescriptorPoolSize{vk::DescriptorType::eUniformBuffer, Frames},
-        vk::DescriptorPoolSize{vk::DescriptorType::eCombinedImageSampler,
-                               Frames}};
-    descriptorPool = m_device.createDescriptorPool({{}, Frames, PoolSizes});
-  }
-
   void createUniformBuffers() {
     auto &PltMgr = gEng::PlatformHandler::getInstance();
     // FIXME is where free memory during swapchain recreation?
@@ -245,8 +241,7 @@ private:
     fillFromChainManager();
 
     createUniformBuffers();
-    createDescriptorPool();
-    createDescriptorSets();
+    createDescriptorPoolAndSets();
     createCommandBuffers();
   }
 
