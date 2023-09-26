@@ -256,6 +256,7 @@ ChainsBuilder::create<vk::RenderPass>(PlatformHandler const &PltMgr,
       {{}, Attachments, Subpass, Dependency});
 }
 
+// FIXME This part should be part of Shader!
 template <>
 vk::DescriptorSetLayout
 ChainsBuilder::create<vk::DescriptorSetLayout>(PlatformHandler const &PltMgr) {
@@ -276,6 +277,7 @@ ChainsBuilder::create<vk::DescriptorSetLayout>(PlatformHandler const &PltMgr) {
   return Dev.createDescriptorSetLayout({{}, Bindings});
 }
 
+// FIXME Part of shader
 template <>
 vk::DescriptorPool
 ChainsBuilder::create<vk::DescriptorPool>(PlatformHandler const &PltMgr) {
@@ -297,7 +299,9 @@ ChainsBuilder::create<std::vector<vk::DescriptorSet>>(
   auto Dev = PltMgr.get<vk::Device>();
   constexpr auto Frames = Config::FInF;
 
-  std::vector<vk::DescriptorSetLayout> Layouts(Frames, DSL);
+  std::array<vk::DescriptorSetLayout, Frames> Layouts;
+  Layouts.fill(DSL);
+
   return Dev.allocateDescriptorSets({DP, Layouts});
 }
 

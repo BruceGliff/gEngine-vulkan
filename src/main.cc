@@ -4,11 +4,6 @@
 
 #include <GLFW/glfw3.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
 // BAD. just a placeholder
 #include "lib/environment/ChainsManager.h"
 #include "lib/environment/platform_handler.h"
@@ -25,7 +20,6 @@
 
 #include <algorithm>
 #include <cassert>
-#include <chrono>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -120,12 +114,10 @@ class HelloTriangleApplication : gEng::UserWindow {
 
   std::vector<vk::Fence> m_inFlightFence;
 
-  gEng::ModelVk M;
+  std::optional<gEng::ModelVk> M;
 
   // FIXME optional to postpond call to constructor.
-  std::array<std::optional<gEng::UniformBuffer>, MAX_FRAMES_IN_FLIGHT> UBs;
 
-  vk::DescriptorPool descriptorPool;
   std::vector<vk::DescriptorSet> descriptorSets;
 
   gEng::Image Img;
@@ -154,6 +146,7 @@ private:
     m_graphicsPipeline = Chains.getP();
 
     m_swapChainFramebuffers = Chains.getFrameBuffers();
+    descriptorSets = Chains.getDSet();
   }
 
   void initVulkan() {
@@ -177,47 +170,13 @@ private:
 
     fs::path ModelPath{EH};
     ModelPath /= "assets/models/viking_room.obj";
-    M = gEng::Model{ModelPath.generic_string()};
+    M.emplace(gEng::Model{ModelPath.generic_string()});
+    M->Img = &Img;
+    M->getShader().DSL = &Chains.getDSet();
 
-    createUniformBuffers();
-    createDescriptorPoolAndSets();
+    M->updateDescriptorSets();
     createCommandBuffers();
     createSyncObjects();
-  }
-
-  void createDescriptorPoolAndSets() {
-    descriptorPool = Chains.getDPool();
-    descriptorSets = Chains.getDSet();
-
-    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i) {
-      auto BufInfo = UBs[i].value().getDescriptorBuffInfo();
-      // TODO. move from loop.
-      auto ImgInfo = Img.getDescriptorImgInfo();
-
-      vk::WriteDescriptorSet BufWrite{
-          descriptorSets[i], 0,      0, vk::DescriptorType::eUniformBuffer,
-          nullptr,           BufInfo};
-      vk::WriteDescriptorSet ImgWrite{descriptorSets[i],
-                                      1,
-                                      0,
-                                      vk::DescriptorType::eCombinedImageSampler,
-                                      ImgInfo,
-                                      nullptr};
-
-      std::array<vk::WriteDescriptorSet, 2> descriptorWrites{
-          std::move(BufWrite), std::move(ImgWrite)};
-
-      // I think this update should occure each frame:
-      // https://vulkan.lunarg.com/doc/view/latest/windows/tutorial/html/08-init_pipeline_layout.html
-      m_device.updateDescriptorSets(descriptorWrites, nullptr);
-    }
-  }
-
-  void createUniformBuffers() {
-    auto &PltMgr = gEng::PlatformHandler::getInstance();
-    // FIXME is where free memory during swapchain recreation?
-    for (size_t i = 0; i != MAX_FRAMES_IN_FLIGHT; ++i)
-      UBs[i].emplace(PltMgr);
   }
 
   // Creates new swap chain when smth goes wrong or resizing.
@@ -230,31 +189,10 @@ private:
     Chains = gEng::ChainsManager{PltMgn, m_Window};
     fillFromChainManager();
 
-    createUniformBuffers();
-    createDescriptorPoolAndSets();
+    // FIXME uniformBuffers should be recreated
+    // createUniformBuffers();
+    // createDescriptorPoolAndSets();
     createCommandBuffers();
-  }
-
-  void updateUniformBuffer(uint32_t CurrImg) {
-    static auto const StartTime = std::chrono::high_resolution_clock::now();
-
-    auto const CurrTime = std::chrono::high_resolution_clock::now();
-    float const Time =
-        std::chrono::duration<float, std::chrono::seconds::period>(CurrTime -
-                                                                   StartTime)
-            .count();
-    gEng::UniformBufferObject ubo{
-        .Model = glm::rotate(glm::mat4(1.f), Time * glm::radians(90.f),
-                             glm::vec3(0.f, 0.f, 1.f)),
-        .View = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f),
-                            glm::vec3(0.f, 0.f, 1.f)),
-        .Proj =
-            glm::perspective(glm::radians(45.f),
-                             m_swapchainExtent.width /
-                                 static_cast<float>(m_swapchainExtent.height),
-                             0.1f, 10.f)};
-    ubo.Proj[1][1] *= -1; // because GLM designed for OpenGL.
-    UBs[CurrImg].value().store(ubo);
   }
 
   void createSyncObjects() {
@@ -299,15 +237,15 @@ private:
     CmdBuff.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
     vk::DeviceSize Offsets{0};
-    CmdBuff.bindVertexBuffers(0, M.getVB(), Offsets);
-    CmdBuff.bindIndexBuffer(M.getIB(), 0, vk::IndexType::eUint32);
+    CmdBuff.bindVertexBuffers(0, M->getVB(), Offsets);
+    CmdBuff.bindIndexBuffer(M->getIB(), 0, vk::IndexType::eUint32);
 
     CmdBuff.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
                                m_pipelineLayout, 0,
                                descriptorSets[currentFrame], nullptr);
 
     // vertexCount, instanceCount, fitstVertex, firstInstance
-    CmdBuff.drawIndexed(M.getIndicesSize(), 1, 0, 0, 0);
+    CmdBuff.drawIndexed(M->getIndicesSize(), 1, 0, 0, 0);
 
     CmdBuff.endRenderPass();
     CmdBuff.end();
@@ -343,7 +281,9 @@ private:
     else if (Res != vk::Result::eSuccess && Res != vk::Result::eSuboptimalKHR)
       throw std::runtime_error("failed to acquire swap chain image!");
 
-    updateUniformBuffer(currentFrame);
+    M->updateUniformBuffer(currentFrame,
+                           m_swapchainExtent.width /
+                               static_cast<float>(m_swapchainExtent.height));
 
     // Only reset the fence if we are submitting work
     Dev.resetFences(m_inFlightFence[currentFrame]);

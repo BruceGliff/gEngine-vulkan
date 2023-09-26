@@ -10,6 +10,8 @@
 
 namespace gEng {
 
+class Image;
+
 struct Model final {
   using Vertices = std::vector<Vertex>;
   using Indices = std::vector<uint32_t>;
@@ -32,19 +34,28 @@ private:
 };
 
 struct ModelVk final {
+  // FIXME unlock in Model.cc
+  ModelVk(Model &&In) : M{std::move(In)} { initBuf(); }
+
   ModelVk &operator=(Model &&In) {
     std::swap(In, M);
     initBuf();
     return *this;
   }
-  ModelVk() = default;
+
+  void updateDescriptorSets() const;
+  void updateUniformBuffer(uint32_t CurrImg, float Ratio);
 
   // TODO temporary
   auto getVB() const { return VB.Buffer; }
   auto getIB() const { return IB.Buffer; }
   auto getIndicesSize() const { return M.get<Model::Indices>().size(); }
+  auto &getShader() { return Shader; }
+
+  Image *Img;
 
 private:
+  vk::Device Dev;
   Model M;
   DrawShader Shader;
   BufferBuilder::Type VB;
