@@ -11,6 +11,7 @@
 
 #include "../environment/platform_handler.h"
 #include "../image/Image.h"
+#include "../shader/DrawShader.hpp"
 
 #include <chrono>
 
@@ -63,32 +64,14 @@ static auto getDeviceBuffer(auto &&Data, auto BufferUsage) {
 }
 
 void ModelVk::initBuf() {
-  Dev = PlatformHandler::getInstance().get<vk::Device>();
+  auto &PltMgr = PlatformHandler::getInstance();
+  Dev = PltMgr.get<vk::Device>();
   VB = getDeviceBuffer(M.get<Model::Vertices>(),
                        vk::BufferUsageFlagBits::eVertexBuffer);
   IB = getDeviceBuffer(M.get<Model::Indices>(),
                        vk::BufferUsageFlagBits::eIndexBuffer);
-}
-
-// FIXME maybe move to Shader
-void ModelVk::updateDescriptorSets() const {
-  assert(Shader.FInF == Shader.DSL->size());
-  auto &DSs = *Shader.DSL;
-  auto ImgInfo = Img->getDescriptorImgInfo();
-
-  for (int i = 0; i != Shader.FInF; ++i) {
-    auto BufInfo = Shader.UBs[i]->getDescriptorBuffInfo();
-    vk::WriteDescriptorSet BufWrite{
-        DSs[i], 0, 0, vk::DescriptorType::eUniformBuffer, nullptr, BufInfo};
-    vk::WriteDescriptorSet ImgWrite{
-        DSs[i],  1,      0, vk::DescriptorType::eCombinedImageSampler,
-        ImgInfo, nullptr};
-    std::array<vk::WriteDescriptorSet, 2> DescriptorWrites{std::move(BufWrite),
-                                                           std::move(ImgWrite)};
-    // I think this update should occure each frame:
-    // https://vulkan.lunarg.com/doc/view/latest/windows/tutorial/html/08-init_pipeline_layout.html
-    Dev.updateDescriptorSets(DescriptorWrites, nullptr);
-  }
+  for (auto &&UB : UBs)
+    UB.emplace(PltMgr);
 }
 
 void ModelVk::updateUniformBuffer(uint32_t CurrImg, float Ratio) {
@@ -105,7 +88,7 @@ void ModelVk::updateUniformBuffer(uint32_t CurrImg, float Ratio) {
                           glm::vec3(0.f, 0.f, 1.f)),
       .Proj = glm::perspective(glm::radians(45.f), Ratio, 0.1f, 10.f)};
   ubo.Proj[1][1] *= -1; // because GLM designed for OpenGL.
-  Shader.UBs[CurrImg]->store(ubo);
+  UBs[CurrImg]->store(ubo);
 }
 
 // For Initialization once.

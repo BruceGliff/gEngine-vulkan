@@ -89,7 +89,7 @@ class HelloTriangleApplication : gEng::UserWindow {
   // Presentation queue.
   vk::Queue m_presentQueue;
 
-  gEng::ChainsManager Chains{};
+  std::optional<gEng::ChainsManager> Chains{};
   vk::SwapchainKHR m_swapchain{};
 
   vk::Extent2D m_swapchainExtent;
@@ -97,8 +97,6 @@ class HelloTriangleApplication : gEng::UserWindow {
   // For each VkImage we create VkImageView.
 
   vk::RenderPass m_renderPass;
-  // Used for an uniform variable.
-  vk::PipelineLayout m_pipelineLayout;
 
   vk::Pipeline m_graphicsPipeline;
 
@@ -115,10 +113,6 @@ class HelloTriangleApplication : gEng::UserWindow {
   std::vector<vk::Fence> m_inFlightFence;
 
   std::optional<gEng::ModelVk> M;
-
-  // FIXME optional to postpond call to constructor.
-
-  std::vector<vk::DescriptorSet> descriptorSets;
 
   gEng::Image Img;
 
@@ -139,14 +133,12 @@ public:
 
 private:
   void fillFromChainManager() {
-    m_swapchain = Chains.getSwapchain();
-    m_swapchainExtent = Chains.getExtent();
-    m_renderPass = Chains.getRPass();
-    m_pipelineLayout = Chains.getPPL();
-    m_graphicsPipeline = Chains.getP();
+    m_swapchain = Chains->getSwapchain();
+    m_swapchainExtent = Chains->getExtent();
+    m_renderPass = Chains->getRPass();
+    m_graphicsPipeline = Chains->getP();
 
-    m_swapChainFramebuffers = Chains.getFrameBuffers();
-    descriptorSets = Chains.getDSet();
+    m_swapChainFramebuffers = Chains->getFrameBuffers();
   }
 
   void initVulkan() {
@@ -161,7 +153,7 @@ private:
     std::tie(m_graphicsQueue, m_presentQueue) =
         PltMgn.get<gEng::detail::GraphPresentQ>();
 
-    Chains = gEng::ChainsManager{PltMgn, m_Window};
+    Chains.emplace(PltMgn, m_Window);
     fillFromChainManager();
 
     fs::path ImagePath{EH};
@@ -171,10 +163,9 @@ private:
     fs::path ModelPath{EH};
     ModelPath /= "assets/models/viking_room.obj";
     M.emplace(gEng::Model{ModelPath.generic_string()});
-    M->Img = &Img;
-    M->getShader().DSL = &Chains.getDSet();
 
-    M->updateDescriptorSets();
+    Chains->getShader().connect(*M, Img);
+
     createCommandBuffers();
     createSyncObjects();
   }
@@ -186,12 +177,9 @@ private:
 
     m_device.waitIdle();
     auto &PltMgn = gEng::PlatformHandler::getInstance();
-    Chains = gEng::ChainsManager{PltMgn, m_Window};
+    Chains.emplace(PltMgn, m_Window);
     fillFromChainManager();
 
-    // FIXME uniformBuffers should be recreated
-    // createUniformBuffers();
-    // createDescriptorPoolAndSets();
     createCommandBuffers();
   }
 
@@ -236,16 +224,9 @@ private:
                             vk::SubpassContents::eInline);
     CmdBuff.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphicsPipeline);
 
-    vk::DeviceSize Offsets{0};
-    CmdBuff.bindVertexBuffers(0, M->getVB(), Offsets);
-    CmdBuff.bindIndexBuffer(M->getIB(), 0, vk::IndexType::eUint32);
-
-    CmdBuff.bindDescriptorSets(vk::PipelineBindPoint::eGraphics,
-                               m_pipelineLayout, 0,
-                               descriptorSets[currentFrame], nullptr);
-
-    // vertexCount, instanceCount, fitstVertex, firstInstance
-    CmdBuff.drawIndexed(M->getIndicesSize(), 1, 0, 0, 0);
+    M->bind(CmdBuff);
+    Chains->getShader().bind(CmdBuff, currentFrame);
+    M->draw(CmdBuff);
 
     CmdBuff.endRenderPass();
     CmdBuff.end();
@@ -315,7 +296,7 @@ private:
   }
 
   void cleanup() {
-    Chains.cleanup(m_device);
+    Chains->cleanup(m_device);
 
     for (auto &&Sem : m_renderFinishedSemaphore)
       m_device.destroySemaphore(Sem);

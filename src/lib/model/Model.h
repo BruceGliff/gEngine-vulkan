@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "../image/BufferBuilder.hpp"
-#include "../shader/DrawShader.hpp"
+#include "../uniform_buffer/UniformBuffer.hpp"
 #include <vertex.h>
 
 namespace gEng {
@@ -43,23 +43,32 @@ struct ModelVk final {
     return *this;
   }
 
-  void updateDescriptorSets() const;
   void updateUniformBuffer(uint32_t CurrImg, float Ratio);
 
-  // TODO temporary
-  auto getVB() const { return VB.Buffer; }
-  auto getIB() const { return IB.Buffer; }
-  auto getIndicesSize() const { return M.get<Model::Indices>().size(); }
-  auto &getShader() { return Shader; }
+  void bind(vk::CommandBuffer CmdBuff) const {
+    vk::DeviceSize Offsets{0};
+    CmdBuff.bindVertexBuffers(0, getVB(), Offsets);
+    CmdBuff.bindIndexBuffer(getIB(), 0, vk::IndexType::eUint32);
+  }
 
-  Image *Img;
+  void draw(vk::CommandBuffer CmdBuff) const {
+    // vertexCount, instanceCount, fitstVertex, firstInstance
+    CmdBuff.drawIndexed(getIndicesSize(), 1, 0, 0, 0);
+  }
+
+  // FIXME Config::FInF
+  std::array<std::optional<UniformBuffer>, 2> UBs;
 
 private:
+  vk::Buffer getVB() const { return VB.Buffer; }
+  vk::Buffer getIB() const { return IB.Buffer; }
+  size_t getIndicesSize() const { return M.get<Model::Indices>().size(); }
+
   vk::Device Dev;
   Model M;
-  DrawShader Shader;
   BufferBuilder::Type VB;
   BufferBuilder::Type IB;
+
   void initBuf();
 };
 

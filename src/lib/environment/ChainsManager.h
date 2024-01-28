@@ -5,6 +5,8 @@
 #include "platform_handler.h"
 
 #include "../image/ImageBuilder.hpp"
+#include "../shader/DrawShader.hpp"
+
 #include <vulkan/vulkan_handles.hpp>
 
 namespace gEng {
@@ -19,10 +21,16 @@ class ChainsManager final {
   detail::Swapchains SCs{};
   vk::RenderPass RPass{};
   vk::SampleCountFlagBits MSAA{};
+
+  DrawShader Shader;
+
+#if 0
   vk::DescriptorSetLayout DescSet{};
   vk::DescriptorPool DescPool{};
   std::vector<vk::DescriptorSet> DSet{};
   vk::PipelineLayout PPL{};
+#endif
+
   vk::Pipeline P{};
 
   ImageBuilder::Type IM{};
@@ -39,11 +47,14 @@ public:
     Swapchain = B.create<vk::SwapchainKHR>(PltMgr, W);
     SCs = B.create<detail::Swapchains>(PltMgr, Swapchain);
     RPass = B.create<vk::RenderPass>(PltMgr, MSAA);
+#if 0
     DescSet = B.create<vk::DescriptorSetLayout>(PltMgr);
     DescPool = B.create<vk::DescriptorPool>(PltMgr);
     DSet = B.create<std::vector<vk::DescriptorSet>>(PltMgr, DescPool, DescSet);
     PPL = B.create<vk::PipelineLayout>(PltMgr, DescSet);
-    P = B.create<vk::Pipeline>(PltMgr, MSAA, PPL, RPass);
+#endif
+    // Here shader is already auto-created.
+    P = B.create<vk::Pipeline>(PltMgr, MSAA, Shader, RPass);
 
     ImageBuilder IB{PltMgr.get<vk::Device>(), PltMgr.get<vk::PhysicalDevice>()};
     IM = IB.create<ImageBuilder::Type>(
@@ -71,8 +82,8 @@ public:
     FrameBuffers = B.create<ChainsBuilder::FrameBuffers>(PltMgr, IView, DView,
                                                          SCs.ImgView, RPass);
   }
-  ChainsManager(ChainsManager &&) = default;
-  ChainsManager &operator=(ChainsManager &&) = default;
+  // ChainsManager(ChainsManager &&) = default;
+  // ChainsManager &operator=(ChainsManager &&) = default;
 
   // Believe this getters are temporary.
   vk::SwapchainKHR &getSwapchain() { return Swapchain; }
@@ -81,11 +92,15 @@ public:
   std::vector<vk::ImageView> &getImageViews() { return SCs.ImgView; }
   vk::Extent2D &getExtent() { return B.Ext; }
   vk::RenderPass &getRPass() { return RPass; };
+  DrawShader &getShader() { return Shader; }
+
+#if 0
   auto &getDSL() { return DescSet; }
   auto &getDPool() { return DescPool; }
   auto &getDSet() { return DSet; }
-
   auto &getPPL() { return PPL; }
+#endif
+
   auto &getP() { return P; }
   auto &getFrameBuffers() { return FrameBuffers; }
 
@@ -102,7 +117,7 @@ public:
       Dev.destroyFramebuffer(SwapchainBuff);
 
     Dev.destroyPipeline(P);
-    Dev.destroyPipelineLayout(PPL);
+    // Dev.destroyPipelineLayout(PPL);
     Dev.destroyRenderPass(RPass);
 
     // FIXME SCs.Img?
@@ -111,8 +126,8 @@ public:
 
     Dev.destroySwapchainKHR(Swapchain);
 
-    Dev.destroyDescriptorPool(DescPool);
-    Dev.destroyDescriptorSetLayout(DescSet);
+    // Dev.destroyDescriptorPool(DescPool);
+    // Dev.destroyDescriptorSetLayout(DescSet);
   }
 };
 

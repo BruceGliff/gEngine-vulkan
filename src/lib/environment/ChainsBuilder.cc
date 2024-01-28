@@ -11,6 +11,7 @@
 #include "gEng/environment.h"
 
 #include "../config/config.hpp"
+#include "../shader/DrawShader.hpp"
 
 using namespace gEng;
 
@@ -257,17 +258,9 @@ ChainsBuilder::create<vk::RenderPass>(PlatformHandler const &PltMgr,
 }
 
 template <>
-vk::PipelineLayout
-ChainsBuilder::create<vk::PipelineLayout>(PlatformHandler const &PltMgr,
-                                          vk::DescriptorSetLayout &DSL) {
-  auto Dev = PltMgr.get<vk::Device>();
-  return Dev.createPipelineLayout({{}, DSL});
-}
-
-template <>
 vk::Pipeline ChainsBuilder::create<vk::Pipeline>(PlatformHandler const &PltMgr,
                                                  vk::SampleCountFlagBits &MSAA,
-                                                 vk::PipelineLayout &PPL,
+                                                 DrawShader &DrwS,
                                                  vk::RenderPass &RPass) {
   auto Dev = PltMgr.get<vk::Device>();
   auto const &EH = SysEnv::getInstance();
@@ -353,7 +346,7 @@ vk::Pipeline ChainsBuilder::create<vk::Pipeline>(PlatformHandler const &PltMgr,
                                               &DepthStencil,
                                               &ColorBlending,
                                               {},
-                                              PPL,
+                                              DrwS.PL,
                                               RPass,
                                               {},
                                               {},
