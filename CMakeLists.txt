@@ -20,6 +20,7 @@ add_subdirectory(external/tinyobjloader)
 find_package(Vulkan REQUIRED)
 find_package(Boost REQUIRED COMPONENTS program_options)
 
+set(ENABLE_GTEST true)
 set(LIBRARY_INCLUDE_PATH
   ${CMAKE_CURRENT_SOURCE_DIR}/external/glm/
   ${CMAKE_CURRENT_SOURCE_DIR}/external/glfw/include

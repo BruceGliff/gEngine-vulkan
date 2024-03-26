@@ -11,6 +11,7 @@
 #include "lib/model/Model.h"
 #include "lib/uniform_buffer/UniformBuffer.hpp"
 
+#include "gEng/utils/Formatter.hpp"
 #include "shader/shader.h"
 #include "vertex.h"
 

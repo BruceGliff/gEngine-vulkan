@@ -6,7 +6,9 @@ project(${PROJECT_NAME})
 file(GLOB_RECURSE SRC_FILES lib/*.cc)
 add_executable(${PROJECT_NAME} main.cc ${SRC_FILES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+set(INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${INCLUDE_DIR})
 
 target_compile_options(${PROJECT_NAME} PRIVATE -Wall -O0 -g )
 target_include_directories(${PROJECT_NAME} PUBLIC ${LIBRARY_INCLUDE_PATH})
@@ -15,11 +17,16 @@ target_link_libraries(${PROJECT_NAME} glfw Vulkan::Vulkan Boost::program_options
 set(OUT_DIR ${CMAKE_BINARY_DIR}/bin/${PROJECT_NAME})
 set_target_properties(${PROJECT_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${OUT_DIR})
 
+if (ENABLE_GTEST)
+  find_package(GTest REQUIRED)
+  enable_testing()
+  add_subdirectory(test)
+endif()
 
 add_custom_command(
     TARGET ${PROJECT_NAME} POST_BUILD
-		COMMAND ${CMAKE_COMMAND} -E copy_directory
-		${CMAKE_CURRENT_SOURCE_DIR}/assets ${OUT_DIR}/assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+    ${CMAKE_CURRENT_SOURCE_DIR}/assets ${OUT_DIR}/assets
 )
 
 #Shader compiling.
